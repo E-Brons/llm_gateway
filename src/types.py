@@ -1,8 +1,9 @@
 """Abstract base classes for the six LLM interface types."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import Callable
 
 
 class GeneralLLM(ABC):
@@ -171,4 +172,4 @@ class ToolsLLM(ABC):
 
 
 # Avoid circular import — import response types only for type annotations
-from .responses import TextResponse, ImageResponse, ToolCallResponse  # noqa: E402, F401
+from .responses import ImageResponse, TextResponse, ToolCallResponse  # noqa: E402, F401

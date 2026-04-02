@@ -1,4 +1,5 @@
 """Shared retry helpers for text and image LLM calls."""
+
 from __future__ import annotations
 
 import time
@@ -87,8 +88,7 @@ def retry_text_completion(
 
     duration_ms = (time.monotonic() - t0) * 1000
     raise ValueError(
-        f"Text completion failed after {max_retries} attempts. "
-        f"Last error: {last_error}"
+        f"Text completion failed after {max_retries} attempts. Last error: {last_error}"
     )
 
 
@@ -158,6 +158,5 @@ def retry_image_generation(
 
     duration_ms = (time.monotonic() - t0) * 1000
     raise ValueError(
-        f"Image generation failed after {max_retries} attempts. "
-        f"Last error: {last_error}"
+        f"Image generation failed after {max_retries} attempts. Last error: {last_error}"
     )

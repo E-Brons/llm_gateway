@@ -1,8 +1,7 @@
 """Tests verifying construction-time parameters are forwarded to API calls."""
+
 import textwrap
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _OLLAMA_URL = "http://localhost:11434"
 
@@ -26,10 +25,13 @@ def _mock_litellm_completion(content: str = "ok") -> MagicMock:
 # Ollama — temperature and max_tokens forwarded as options
 # ---------------------------------------------------------------------------
 
+
 def test_ollama_general_temperature_in_options():
     from src.impl.impl_ollama import OllamaGeneralLLM
 
-    with patch("src.impl.impl_ollama.requests.post", return_value=_mock_chat_response()) as mock_post:
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response()
+    ) as mock_post:
         llm = OllamaGeneralLLM(model="phi3", ollama_url=_OLLAMA_URL, temperature=0.3)
         llm.complete([{"role": "user", "content": "x"}])
 
@@ -39,7 +41,9 @@ def test_ollama_general_temperature_in_options():
 def test_ollama_general_max_tokens_as_num_predict():
     from src.impl.impl_ollama import OllamaGeneralLLM
 
-    with patch("src.impl.impl_ollama.requests.post", return_value=_mock_chat_response()) as mock_post:
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response()
+    ) as mock_post:
         llm = OllamaGeneralLLM(model="phi3", ollama_url=_OLLAMA_URL, max_tokens=512)
         llm.complete([{"role": "user", "content": "x"}])
 
@@ -51,7 +55,9 @@ def test_ollama_general_response_schema_as_format():
 
     schema = {"type": "object", "properties": {"name": {"type": "string"}}}
 
-    with patch("src.impl.impl_ollama.requests.post", return_value=_mock_chat_response()) as mock_post:
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response()
+    ) as mock_post:
         llm = OllamaGeneralLLM(model="phi3", ollama_url=_OLLAMA_URL, response_schema=schema)
         llm.complete([{"role": "user", "content": "x"}])
 
@@ -61,7 +67,9 @@ def test_ollama_general_response_schema_as_format():
 def test_ollama_no_options_when_not_set():
     from src.impl.impl_ollama import OllamaGeneralLLM
 
-    with patch("src.impl.impl_ollama.requests.post", return_value=_mock_chat_response()) as mock_post:
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response()
+    ) as mock_post:
         llm = OllamaGeneralLLM(model="phi3", ollama_url=_OLLAMA_URL)
         llm.complete([{"role": "user", "content": "x"}])
 
@@ -74,11 +82,14 @@ def test_ollama_no_options_when_not_set():
 # LiteLLM — temperature, max_tokens, response_schema forwarded
 # ---------------------------------------------------------------------------
 
+
 def test_litellm_general_temperature_passed():
     from src.impl.impl_litellm import LiteLLMGeneralLLM
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.completion", return_value=_mock_litellm_completion()) as mock_c:
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_litellm_completion()
+        ) as mock_c:
             llm = LiteLLMGeneralLLM(model="gpt-4o", temperature=0.7)
             llm.complete([{"role": "user", "content": "x"}])
 
@@ -89,7 +100,9 @@ def test_litellm_general_max_tokens_passed():
     from src.impl.impl_litellm import LiteLLMGeneralLLM
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.completion", return_value=_mock_litellm_completion()) as mock_c:
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_litellm_completion()
+        ) as mock_c:
             llm = LiteLLMGeneralLLM(model="gpt-4o", max_tokens=1024)
             llm.complete([{"role": "user", "content": "x"}])
 
@@ -102,7 +115,9 @@ def test_litellm_general_response_schema_passed():
     schema = {"type": "json_object"}
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.completion", return_value=_mock_litellm_completion()) as mock_c:
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_litellm_completion()
+        ) as mock_c:
             llm = LiteLLMGeneralLLM(model="gpt-4o", response_schema=schema)
             llm.complete([{"role": "user", "content": "x"}])
 
@@ -113,7 +128,9 @@ def test_litellm_no_extras_when_not_set():
     from src.impl.impl_litellm import LiteLLMGeneralLLM
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.completion", return_value=_mock_litellm_completion()) as mock_c:
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_litellm_completion()
+        ) as mock_c:
             llm = LiteLLMGeneralLLM(model="gpt-4o")
             llm.complete([{"role": "user", "content": "x"}])
 
@@ -126,6 +143,7 @@ def test_litellm_no_extras_when_not_set():
 # ---------------------------------------------------------------------------
 # CLI — params stored but not forwarded (accepted without error)
 # ---------------------------------------------------------------------------
+
 
 def test_cli_accepts_construction_params():
     from src.impl.impl_cli import CLITextGenLLM
@@ -140,6 +158,7 @@ def test_cli_accepts_construction_params():
 # ---------------------------------------------------------------------------
 # Factory — passes temperature/max_tokens from config
 # ---------------------------------------------------------------------------
+
 
 def test_factory_passes_temperature_from_config(tmp_path):
     from src.config import load_llm_config

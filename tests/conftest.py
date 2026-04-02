@@ -1,4 +1,5 @@
 """Shared pytest fixtures for llm_gateway tests."""
+
 import os
 import sys
 from pathlib import Path
@@ -10,7 +11,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 _VISION_KEYWORDS = ("llava", "moondream", "vision", "minicpm-v", "bakllava", "vl")
-_IMAGE_KEYWORDS  = ("flux", "diffusion", "sdxl", "sd3")
+_IMAGE_KEYWORDS = ("flux", "diffusion", "sdxl", "sd3")
 
 
 def _get_ollama_models(url: str) -> list[str]:

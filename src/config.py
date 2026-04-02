@@ -1,4 +1,5 @@
 """Configuration models and YAML loader for the llm_gateway module."""
+
 from __future__ import annotations
 
 from pathlib import Path

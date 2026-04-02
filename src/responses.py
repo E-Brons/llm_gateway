@@ -1,4 +1,5 @@
 """Response types for all LLM calls."""
+
 from __future__ import annotations
 
 from typing import Any

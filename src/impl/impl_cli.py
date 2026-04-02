@@ -3,6 +3,7 @@
 All classes run ``claude --print --output-format json`` as a subprocess and
 parse the JSON result.  ImageGenLLM and ToolsLLM are not implemented via CLI.
 """
+
 from __future__ import annotations
 
 import base64
@@ -11,9 +12,6 @@ import logging
 import subprocess
 import time
 import uuid
-from typing import Callable
-
-logger = logging.getLogger(__name__)
 
 from .._retry import retry_text_completion
 from ..responses import TextResponse
@@ -24,11 +22,12 @@ from ..types import (
     TextGenLLM,
 )
 
+logger = logging.getLogger(__name__)
+
 _CLI_CMD = "claude"
 
 
-def _run_claude(prompt: str, *, system: str | None = None,
-                timeout: int = 120) -> tuple[str, float]:
+def _run_claude(prompt: str, *, system: str | None = None, timeout: int = 120) -> tuple[str, float]:
     cmd = [_CLI_CMD, "--print", "--output-format", "json"]
     if system:
         cmd += ["--system-prompt", system]
@@ -47,10 +46,19 @@ def _run_claude(prompt: str, *, system: str | None = None,
     return parsed.get("result", ""), duration_ms
 
 
-def _run_claude_stream_json(messages: list[dict], *, timeout: int = 120,
-                             effort: str | None = None) -> tuple[str, float]:
-    cmd = [_CLI_CMD, "-p", "", "--verbose", "--output-format", "stream-json",
-           "--input-format", "stream-json"]
+def _run_claude_stream_json(
+    messages: list[dict], *, timeout: int = 120, effort: str | None = None
+) -> tuple[str, float]:
+    cmd = [
+        _CLI_CMD,
+        "-p",
+        "",
+        "--verbose",
+        "--output-format",
+        "stream-json",
+        "--input-format",
+        "stream-json",
+    ]
     if effort:
         cmd += ["--effort", effort]
 
@@ -68,13 +76,17 @@ def _run_claude_stream_json(messages: list[dict], *, timeout: int = 120,
         if isinstance(content, str):
             merged = {**first, "content": f"{system_content}\n\n{content}"}
         else:
-            merged = {**first, "content": [{"type": "text", "text": system_content}] + list(content)}
+            merged = {
+                **first,
+                "content": [{"type": "text", "text": system_content}] + list(content),
+            }
         user_messages[0] = merged
 
     session_id = str(uuid.uuid4())
     lines = [
-        json.dumps({"type": "user", "message": msg,
-                    "parent_tool_use_id": None, "session_id": session_id})
+        json.dumps(
+            {"type": "user", "message": msg, "parent_tool_use_id": None, "session_id": session_id}
+        )
         for msg in user_messages
     ]
     stdin_data = "\n".join(lines)
@@ -104,11 +116,21 @@ def _run_claude_stream_json(messages: list[dict], *, timeout: int = 120,
 
 
 class CLIGeneralLLM(GeneralLLM):
-    def __init__(self, model: str = "claude", timeout: int = 60,
-                 temperature: float | None = None, max_tokens: int | None = None,
-                 response_schema: dict | None = None) -> None:
-        super().__init__(model=model, timeout=timeout, temperature=temperature,
-                         max_tokens=max_tokens, response_schema=response_schema)
+    def __init__(
+        self,
+        model: str = "claude",
+        timeout: int = 60,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        super().__init__(
+            model=model,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+        )
 
     def complete(self, messages: list[dict]) -> TextResponse:
         system = next((m["content"] for m in messages if m.get("role") == "system"), None)
@@ -118,57 +140,93 @@ class CLIGeneralLLM(GeneralLLM):
             for m in user_msgs
         )
         content, duration_ms = _run_claude(prompt, system=system, timeout=self.timeout)
-        return TextResponse(content=content, model=self.model,
-                            duration_ms=duration_ms, attempts=1)
+        return TextResponse(content=content, model=self.model, duration_ms=duration_ms, attempts=1)
 
 
 class CLITextGenLLM(TextGenLLM):
-    def __init__(self, model: str = "claude", timeout: int = 120,
-                 temperature: float | None = None, max_tokens: int | None = None,
-                 response_schema: dict | None = None) -> None:
-        super().__init__(model=model, timeout=timeout, temperature=temperature,
-                         max_tokens=max_tokens, response_schema=response_schema)
+    def __init__(
+        self,
+        model: str = "claude",
+        timeout: int = 120,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        super().__init__(
+            model=model,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+        )
 
     def complete(self, messages: list[dict], *, max_retries: int = 3) -> TextResponse:
         def call_fn(msgs: list[dict]) -> tuple[str, str]:
             content, _ = _run_claude_stream_json(msgs, timeout=self.timeout)
             return content, self.model
+
         return retry_text_completion(call_fn, messages, max_retries, self.model)
 
 
 class CLIReasoningLLM(ReasoningLLM):
     """Uses ``--effort high``; thinking_budget is accepted but ignored."""
 
-    def __init__(self, model: str = "claude", timeout: int = 300,
-                 temperature: float | None = None, max_tokens: int | None = None,
-                 response_schema: dict | None = None) -> None:
-        super().__init__(model=model, timeout=timeout, temperature=temperature,
-                         max_tokens=max_tokens, response_schema=response_schema)
+    def __init__(
+        self,
+        model: str = "claude",
+        timeout: int = 300,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        super().__init__(
+            model=model,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+        )
 
-    def complete(self, messages: list[dict], *,
-                 thinking_budget: int | None = None) -> TextResponse:
+    def complete(self, messages: list[dict], *, thinking_budget: int | None = None) -> TextResponse:
         content, duration_ms = _run_claude_stream_json(
-            messages, timeout=self.timeout, effort="high")
-        return TextResponse(content=content, model=self.model,
-                            duration_ms=duration_ms, attempts=1)
+            messages, timeout=self.timeout, effort="high"
+        )
+        return TextResponse(content=content, model=self.model, duration_ms=duration_ms, attempts=1)
 
 
 class CLIImageInspectorLLM(ImageInspectorLLM):
-    def __init__(self, model: str = "claude", timeout: int = 90,
-                 temperature: float | None = None, max_tokens: int | None = None,
-                 response_schema: dict | None = None) -> None:
-        super().__init__(model=model, timeout=timeout, temperature=temperature,
-                         max_tokens=max_tokens, response_schema=response_schema)
+    def __init__(
+        self,
+        model: str = "claude",
+        timeout: int = 90,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        super().__init__(
+            model=model,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+        )
 
-    def inspect(self, image: bytes, system: str, prompt: str, *,
-                max_retries: int = 3) -> TextResponse:
+    def inspect(
+        self, image: bytes, system: str, prompt: str, *, max_retries: int = 3
+    ) -> TextResponse:
         b64 = base64.b64encode(image).decode("ascii")
         messages: list[dict] = [
             {"role": "system", "content": system},
-            {"role": "user", "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
-                {"type": "text", "text": prompt},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": "image/png", "data": b64},
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            },
         ]
 
         def call_fn(msgs: list[dict]) -> tuple[str, str]:

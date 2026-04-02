@@ -1,6 +1,6 @@
 """Tests for Ollama implementations of all LLM interface types."""
+
 import base64
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,8 +8,9 @@ import pytest
 _OLLAMA_URL = "http://localhost:11434"
 
 
-def _mock_chat_response(content: str, model: str = "test-model",
-                        tool_calls: list | None = None) -> MagicMock:
+def _mock_chat_response(
+    content: str, model: str = "test-model", tool_calls: list | None = None
+) -> MagicMock:
     resp = MagicMock()
     resp.raise_for_status = MagicMock()
     data: dict = {"message": {"content": content, "role": "assistant"}, "model": model}
@@ -19,8 +20,9 @@ def _mock_chat_response(content: str, model: str = "test-model",
     return resp
 
 
-def _mock_generate_response(response: str = "", model: str = "test-model",
-                             images: list | None = None) -> MagicMock:
+def _mock_generate_response(
+    response: str = "", model: str = "test-model", images: list | None = None
+) -> MagicMock:
     resp = MagicMock()
     resp.raise_for_status = MagicMock()
     data: dict = {"response": response, "model": model}
@@ -34,10 +36,13 @@ def _mock_generate_response(response: str = "", model: str = "test-model",
 # OllamaGeneralLLM
 # ---------------------------------------------------------------------------
 
+
 def test_ollama_general_happy_path():
     from src.impl.impl_ollama import OllamaGeneralLLM
 
-    with patch("src.impl.impl_ollama.requests.post", return_value=_mock_chat_response("hi")) as mock_post:
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response("hi")
+    ) as mock_post:
         llm = OllamaGeneralLLM(model="ollama/phi3", ollama_url=_OLLAMA_URL)
         result = llm.complete([{"role": "user", "content": "hello"}])
 
@@ -49,7 +54,9 @@ def test_ollama_general_happy_path():
 def test_ollama_general_strips_prefix():
     from src.impl.impl_ollama import OllamaGeneralLLM
 
-    with patch("src.impl.impl_ollama.requests.post", return_value=_mock_chat_response("ok")) as mock_post:
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response("ok")
+    ) as mock_post:
         llm = OllamaGeneralLLM(model="ollama/llama3", ollama_url=_OLLAMA_URL)
         llm.complete([{"role": "user", "content": "q"}])
 
@@ -59,6 +66,7 @@ def test_ollama_general_strips_prefix():
 # ---------------------------------------------------------------------------
 # OllamaTextGenLLM
 # ---------------------------------------------------------------------------
+
 
 def test_ollama_text_gen_happy_path():
     from src.impl.impl_ollama import OllamaTextGenLLM
@@ -96,6 +104,7 @@ def test_ollama_text_gen_exhaustion_raises():
 # OllamaReasoningLLM
 # ---------------------------------------------------------------------------
 
+
 def test_ollama_reasoning_happy_path():
     from src.impl.impl_ollama import OllamaReasoningLLM
 
@@ -119,6 +128,7 @@ def test_ollama_reasoning_thinking_budget_ignored():
 # ---------------------------------------------------------------------------
 # OllamaImageGenLLM
 # ---------------------------------------------------------------------------
+
 
 def _image_gen_response(img_b64: str, model: str = "flux") -> MagicMock:
     resp = MagicMock()
@@ -159,7 +169,9 @@ def test_ollama_image_gen_width_height_seed():
 
     b64 = base64.b64encode(b"img").decode()
 
-    with patch("src.impl.impl_ollama.requests.post", return_value=_image_gen_response(b64)) as mock_post:
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_image_gen_response(b64)
+    ) as mock_post:
         llm = OllamaImageGenLLM(model="flux", ollama_url=_OLLAMA_URL)
         llm.generate("x", max_retries=1, width=256, height=256, seed=42)
 
@@ -173,11 +185,13 @@ def test_ollama_image_gen_width_height_seed():
 # OllamaImageInspectorLLM
 # ---------------------------------------------------------------------------
 
+
 def test_ollama_image_inspector_happy_path():
     from src.impl.impl_ollama import OllamaImageInspectorLLM
 
-    with patch("src.impl.impl_ollama.requests.post",
-               return_value=_mock_generate_response("I see a cat")):
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_generate_response("I see a cat")
+    ):
         llm = OllamaImageInspectorLLM(model="llava", ollama_url=_OLLAMA_URL)
         result = llm.inspect(b"imgdata", "You are an analyst.", "Describe the image.")
 
@@ -190,8 +204,9 @@ def test_ollama_image_inspector_passes_image_b64():
     raw = b"raw image bytes"
     expected_b64 = base64.b64encode(raw).decode("ascii")
 
-    with patch("src.impl.impl_ollama.requests.post",
-               return_value=_mock_generate_response("desc")) as mock_post:
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_generate_response("desc")
+    ) as mock_post:
         llm = OllamaImageInspectorLLM(model="llava", ollama_url=_OLLAMA_URL)
         llm.inspect(raw, "sys", "describe")
 
