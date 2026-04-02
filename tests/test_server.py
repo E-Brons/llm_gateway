@@ -71,8 +71,9 @@ def client(tmp_path):
 
     with patch.dict(os.environ, env):
         with patch("src.server.LLMFactory", return_value=mock_factory):
-            with TestClient(app) as c:
-                yield c, mock_factory
+            with patch("src.server._run_sanity_checks"):
+                with TestClient(app) as c:
+                    yield c, mock_factory
 
 
 # ── health ────────────────────────────────────────────────────────────────────
@@ -241,6 +242,7 @@ def test_local_override_loaded(tmp_path):
         },
     ):
         with patch("src.server.LLMFactory", return_value=mock_factory):
-            with TestClient(app) as c:
-                resp = c.get("/health")
-                assert resp.status_code == 200
+            with patch("src.server._run_sanity_checks"):
+                with TestClient(app) as c:
+                    resp = c.get("/health")
+                    assert resp.status_code == 200
