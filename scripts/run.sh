@@ -62,16 +62,16 @@ LLM_GATEWAY_PORT="$PORT" \
 
 echo $! > "$PID_FILE"
 
-# Wait for the server to be ready
+# Wait for the server to be ready (sanity checks run at startup — allow up to 3 min)
 echo -n "Waiting for gateway"
-for i in $(seq 1 30); do
+for i in $(seq 1 180); do
   if curl -sf "http://$HOST:$PORT/health" >/dev/null 2>&1; then
     echo " ready."
     echo "LLM Gateway running at http://$HOST:$PORT"
     exit 0
   fi
   sleep 1
-  echo -n "."
+  [ $((i % 10)) -eq 0 ] && echo -n " ${i}s" || echo -n "."
 done
 
 echo " timed out."
