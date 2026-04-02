@@ -1,4 +1,5 @@
 """FastAPI gateway server — exposes all LLM types over HTTP."""
+
 from __future__ import annotations
 
 import base64
@@ -21,17 +22,16 @@ _factory: LLMFactory | None = None
 _config: LLMConfig | None = None
 
 _TASK_CAPABILITY: dict[str, str] = {
-    "general":         "text",
-    "text_gen":        "text",
-    "reasoning":       "reasoning",
-    "image_gen":       "image_gen",
+    "general": "text",
+    "text_gen": "text",
+    "reasoning": "reasoning",
+    "image_gen": "image_gen",
     "image_inspector": "visual",
-    "tools":           "tools",
+    "tools": "tools",
 }
 
 
-def _load_settings(base: str = "settings.json",
-                   override: str = "local/settings.json") -> dict:
+def _load_settings(base: str = "settings.json", override: str = "local/settings.json") -> dict:
     """Merge settings.json with optional local/settings.json override."""
     import json as _json
     from pathlib import Path
@@ -39,7 +39,11 @@ def _load_settings(base: str = "settings.json",
     def _deep_merge(b: dict, o: dict) -> dict:
         r = {**b}
         for k, v in o.items():
-            r[k] = _deep_merge(r[k], v) if k in r and isinstance(r[k], dict) and isinstance(v, dict) else v
+            r[k] = (
+                _deep_merge(r[k], v)
+                if k in r and isinstance(r[k], dict) and isinstance(v, dict)
+                else v
+            )
         return r
 
     data: dict = {}
@@ -64,7 +68,7 @@ def _log_startup(
 
     lines = [
         "",
-        f"  LLM Gateway  starting up",
+        "  LLM Gateway  starting up",
         sep,
         f"  Listen      {host}:{port}",
         f"  Config      {config_path}",
@@ -104,10 +108,10 @@ def _log_startup(
 async def lifespan(app: FastAPI):
     global _factory, _config
 
-    config_path    = os.environ.get("LLM_GATEWAY_ROUTE", "llm_route.yml")
-    override_path  = os.environ.get("LLM_GATEWAY_ROUTE_LOCAL", "local/llm_route.yml")
-    host           = os.environ.get("LLM_GATEWAY_HOST", "127.0.0.1")
-    port           = os.environ.get("LLM_GATEWAY_PORT", "4096")
+    config_path = os.environ.get("LLM_GATEWAY_ROUTE", "llm_route.yml")
+    override_path = os.environ.get("LLM_GATEWAY_ROUTE_LOCAL", "local/llm_route.yml")
+    host = os.environ.get("LLM_GATEWAY_HOST", "127.0.0.1")
+    port = os.environ.get("LLM_GATEWAY_PORT", "4096")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
 
@@ -137,6 +141,7 @@ def _f() -> LLMFactory:
 
 
 # ── Request models ─────────────────────────────────────────────────────────
+
 
 class MessageRequest(BaseModel):
     messages: list[dict[str, Any]]
@@ -171,6 +176,7 @@ class ToolsRequest(BaseModel):
 
 # ── Routes ─────────────────────────────────────────────────────────────────
 
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -182,12 +188,12 @@ def list_models():
         raise HTTPException(503, "Config not loaded")
 
     tasks = [
-        ("general",         _config.general),
-        ("text_gen",        _config.text_gen),
-        ("reasoning",       _config.reasoning),
-        ("image_gen",       _config.image_gen),
+        ("general", _config.general),
+        ("text_gen", _config.text_gen),
+        ("reasoning", _config.reasoning),
+        ("image_gen", _config.image_gen),
         ("image_inspector", _config.image_inspector),
-        ("tools",           _config.tools),
+        ("tools", _config.tools),
     ]
 
     groups: dict[tuple[str, str], dict] = {}
@@ -228,8 +234,7 @@ def list_models():
         if entry["implementation"] == "ollama":
             bare = entry["model"].removeprefix("ollama/")
             entry["available"] = any(
-                p == bare or p.startswith(bare + ":") or p == entry["model"]
-                for p in ollama_pulled
+                p == bare or p.startswith(bare + ":") or p == entry["model"] for p in ollama_pulled
             )
 
     return {"configured": configured, "ollama_available": ollama_pulled}
@@ -247,34 +252,42 @@ def text_gen(req: MessageRequest):
 
 @app.post("/reasoning")
 def reasoning(req: ReasoningRequest):
-    return _f().reasoning().complete(
-        req.messages, thinking_budget=req.thinking_budget
-    ).model_dump()
+    return _f().reasoning().complete(req.messages, thinking_budget=req.thinking_budget).model_dump()
 
 
 @app.post("/image_gen")
 def image_gen(req: ImageGenRequest):
-    resp = _f().image_gen().generate(
-        req.prompt, width=req.width, height=req.height,
-        seed=req.seed, max_retries=req.max_retries,
+    resp = (
+        _f()
+        .image_gen()
+        .generate(
+            req.prompt,
+            width=req.width,
+            height=req.height,
+            seed=req.seed,
+            max_retries=req.max_retries,
+        )
     )
     return {
         "image_b64": base64.b64encode(resp.image).decode(),
-        "model": resp.model, "duration_ms": resp.duration_ms,
-        "attempts": resp.attempts, "last_error": resp.last_error,
+        "model": resp.model,
+        "duration_ms": resp.duration_ms,
+        "attempts": resp.attempts,
+        "last_error": resp.last_error,
     }
 
 
 @app.post("/image_inspector")
 def image_inspector(req: ImageInspectRequest):
     image = base64.b64decode(req.image_b64)
-    return _f().image_inspector().inspect(
-        image, req.system, req.prompt, max_retries=req.max_retries
-    ).model_dump()
+    return (
+        _f()
+        .image_inspector()
+        .inspect(image, req.system, req.prompt, max_retries=req.max_retries)
+        .model_dump()
+    )
 
 
 @app.post("/tools")
 def tools(req: ToolsRequest):
-    return _f().tools().complete(
-        req.messages, req.tools, max_retries=req.max_retries
-    ).model_dump()
+    return _f().tools().complete(req.messages, req.tools, max_retries=req.max_retries).model_dump()

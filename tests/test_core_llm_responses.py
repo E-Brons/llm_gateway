@@ -1,4 +1,5 @@
 """Tests for TextResponse, ImageResponse, ToolCall, and ToolCallResponse."""
+
 import pytest
 
 
@@ -16,8 +17,9 @@ def test_text_response_creation():
 def test_text_response_with_last_error():
     from src import TextResponse
 
-    r = TextResponse(content="ok", model="m", duration_ms=1.0, attempts=2,
-                     last_error="previous attempt failed")
+    r = TextResponse(
+        content="ok", model="m", duration_ms=1.0, attempts=2, last_error="previous attempt failed"
+    )
     assert r.last_error == "previous attempt failed"
     assert r.attempts == 2
 
@@ -43,8 +45,9 @@ def test_image_response_creation():
 def test_image_response_with_last_error():
     from src import ImageResponse
 
-    r = ImageResponse(image=b"data", model="m", duration_ms=5.0, attempts=3,
-                      last_error="bad image on attempt 1")
+    r = ImageResponse(
+        image=b"data", model="m", duration_ms=5.0, attempts=3, last_error="bad image on attempt 1"
+    )
     assert r.last_error == "bad image on attempt 1"
     assert r.attempts == 3
 
@@ -60,6 +63,7 @@ def test_image_response_immutable():
 # ---------------------------------------------------------------------------
 # ToolCall
 # ---------------------------------------------------------------------------
+
 
 def test_tool_call_creation():
     from src import ToolCall
@@ -89,12 +93,14 @@ def test_tool_call_empty_arguments():
 # ToolCallResponse
 # ---------------------------------------------------------------------------
 
+
 def test_tool_call_response_with_tool_calls():
     from src import ToolCall, ToolCallResponse
 
     tc = ToolCall(id="call_1", name="get_weather", arguments={"city": "Berlin"})
-    r = ToolCallResponse(content=None, tool_calls=[tc], model="gpt-4o",
-                         duration_ms=55.0, attempts=1)
+    r = ToolCallResponse(
+        content=None, tool_calls=[tc], model="gpt-4o", duration_ms=55.0, attempts=1
+    )
     assert r.content is None
     assert len(r.tool_calls) == 1
     assert r.tool_calls[0].name == "get_weather"
@@ -105,8 +111,13 @@ def test_tool_call_response_with_content_and_tools():
     from src import ToolCall, ToolCallResponse
 
     tc = ToolCall(id="call_2", name="search", arguments={"query": "llm"})
-    r = ToolCallResponse(content="Let me search for that.", tool_calls=[tc],
-                         model="claude-sonnet-4-6", duration_ms=120.0, attempts=1)
+    r = ToolCallResponse(
+        content="Let me search for that.",
+        tool_calls=[tc],
+        model="claude-sonnet-4-6",
+        duration_ms=120.0,
+        attempts=1,
+    )
     assert r.content == "Let me search for that."
     assert len(r.tool_calls) == 1
 
@@ -114,8 +125,9 @@ def test_tool_call_response_with_content_and_tools():
 def test_tool_call_response_empty_tool_calls():
     from src import ToolCallResponse
 
-    r = ToolCallResponse(content="No tools needed.", tool_calls=[],
-                         model="gpt-4o", duration_ms=30.0, attempts=1)
+    r = ToolCallResponse(
+        content="No tools needed.", tool_calls=[], model="gpt-4o", duration_ms=30.0, attempts=1
+    )
     assert r.tool_calls == []
     assert r.content == "No tools needed."
 
@@ -123,8 +135,7 @@ def test_tool_call_response_empty_tool_calls():
 def test_tool_call_response_immutable():
     from src import ToolCallResponse
 
-    r = ToolCallResponse(content=None, tool_calls=[], model="m",
-                         duration_ms=1.0, attempts=1)
+    r = ToolCallResponse(content=None, tool_calls=[], model="m", duration_ms=1.0, attempts=1)
     with pytest.raises(Exception):
         r.content = "x"  # type: ignore[misc]
 
@@ -132,7 +143,13 @@ def test_tool_call_response_immutable():
 def test_tool_call_response_with_last_error():
     from src import ToolCallResponse
 
-    r = ToolCallResponse(content=None, tool_calls=[], model="m",
-                         duration_ms=1.0, attempts=2, last_error="timeout on attempt 1")
+    r = ToolCallResponse(
+        content=None,
+        tool_calls=[],
+        model="m",
+        duration_ms=1.0,
+        attempts=2,
+        last_error="timeout on attempt 1",
+    )
     assert r.last_error == "timeout on attempt 1"
     assert r.attempts == 2

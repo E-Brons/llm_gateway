@@ -1,4 +1,5 @@
 """Tests for Claude CLI subprocess implementations."""
+
 import json
 import subprocess
 from unittest.mock import MagicMock, patch
@@ -26,6 +27,7 @@ def _ndjson_result(result: str) -> str:
 # CLIGeneralLLM
 # ---------------------------------------------------------------------------
 
+
 def test_cli_general_happy_path():
     from src.impl.impl_cli import CLIGeneralLLM
 
@@ -40,12 +42,16 @@ def test_cli_general_happy_path():
 def test_cli_general_system_prompt_passed():
     from src.impl.impl_cli import CLIGeneralLLM
 
-    with patch("src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_json_result("ok"))) as mock_run:
+    with patch(
+        "src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_json_result("ok"))
+    ) as mock_run:
         llm = CLIGeneralLLM()
-        llm.complete([
-            {"role": "system", "content": "Be helpful."},
-            {"role": "user", "content": "hello"},
-        ])
+        llm.complete(
+            [
+                {"role": "system", "content": "Be helpful."},
+                {"role": "user", "content": "hello"},
+            ]
+        )
 
     cmd = mock_run.call_args[0][0]
     assert "--system-prompt" in cmd
@@ -65,10 +71,13 @@ def test_cli_general_non_zero_exit_raises():
 # CLITextGenLLM
 # ---------------------------------------------------------------------------
 
+
 def test_cli_text_gen_happy_path():
     from src.impl.impl_cli import CLITextGenLLM
 
-    with patch("src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_ndjson_result("response"))):
+    with patch(
+        "src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_ndjson_result("response"))
+    ):
         llm = CLITextGenLLM()
         result = llm.complete([{"role": "user", "content": "x"}])
 
@@ -78,7 +87,9 @@ def test_cli_text_gen_happy_path():
 def test_cli_text_gen_stream_json_format():
     from src.impl.impl_cli import CLITextGenLLM
 
-    with patch("src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_ndjson_result("ok"))) as mock_run:
+    with patch(
+        "src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_ndjson_result("ok"))
+    ) as mock_run:
         llm = CLITextGenLLM()
         llm.complete([{"role": "user", "content": "x"}])
 
@@ -100,10 +111,13 @@ def test_cli_text_gen_empty_retries_then_raises():
 # CLIReasoningLLM
 # ---------------------------------------------------------------------------
 
+
 def test_cli_reasoning_uses_effort_high():
     from src.impl.impl_cli import CLIReasoningLLM
 
-    with patch("src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_ndjson_result("deep"))) as mock_run:
+    with patch(
+        "src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_ndjson_result("deep"))
+    ) as mock_run:
         llm = CLIReasoningLLM()
         result = llm.complete([{"role": "user", "content": "think"}])
 
@@ -127,10 +141,13 @@ def test_cli_reasoning_thinking_budget_accepted():
 # CLIImageInspectorLLM
 # ---------------------------------------------------------------------------
 
+
 def test_cli_image_inspector_happy_path():
     from src.impl.impl_cli import CLIImageInspectorLLM
 
-    with patch("src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_ndjson_result("a dog"))):
+    with patch(
+        "src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_ndjson_result("a dog"))
+    ):
         llm = CLIImageInspectorLLM()
         result = llm.inspect(b"imgdata", "You are a visual analyst.", "What do you see?")
 
@@ -139,11 +156,14 @@ def test_cli_image_inspector_happy_path():
 
 def test_cli_image_inspector_embeds_image_in_stream_json():
     import base64
+
     from src.impl.impl_cli import CLIImageInspectorLLM
 
     raw = b"fake png data"
 
-    with patch("src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_ndjson_result("ok"))) as mock_run:
+    with patch(
+        "src.impl.impl_cli.subprocess.run", return_value=_mock_proc(_ndjson_result("ok"))
+    ) as mock_run:
         llm = CLIImageInspectorLLM()
         llm.inspect(raw, "sys", "describe")
 

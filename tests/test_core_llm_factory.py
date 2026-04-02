@@ -1,4 +1,5 @@
 """Tests for LLMConfig, load_llm_config, and LLMFactory."""
+
 import textwrap
 from pathlib import Path
 from unittest.mock import patch
@@ -40,6 +41,7 @@ _SAMPLE_YAML = textwrap.dedent("""\
 # Config loading
 # ---------------------------------------------------------------------------
 
+
 def test_load_llm_config_from_yaml(tmp_path: Path):
     from src.config import load_llm_config
 
@@ -57,6 +59,7 @@ def test_load_llm_config_from_yaml(tmp_path: Path):
 
 def test_load_llm_config_missing_field_raises(tmp_path: Path):
     from pydantic import ValidationError
+
     from src.config import load_llm_config
 
     bad_yaml = textwrap.dedent("""\
@@ -74,9 +77,10 @@ def test_load_llm_config_missing_field_raises(tmp_path: Path):
 # Registry and factory
 # ---------------------------------------------------------------------------
 
+
 def test_factory_general_returns_ollama(tmp_path: Path):
-    from src.factory import LLMFactory
     from src.config import load_llm_config
+    from src.factory import LLMFactory
     from src.impl.impl_ollama import OllamaGeneralLLM
 
     cfg_file = tmp_path / "llm.yml"
@@ -91,8 +95,8 @@ def test_factory_general_returns_ollama(tmp_path: Path):
 
 
 def test_factory_text_gen_returns_litellm(tmp_path: Path):
-    from src.factory import LLMFactory
     from src.config import load_llm_config
+    from src.factory import LLMFactory
     from src.impl.impl_litellm import LiteLLMTextGenLLM
 
     cfg_file = tmp_path / "llm.yml"
@@ -107,8 +111,8 @@ def test_factory_text_gen_returns_litellm(tmp_path: Path):
 
 
 def test_factory_tools_returns_litellm(tmp_path: Path):
-    from src.factory import LLMFactory
     from src.config import load_llm_config
+    from src.factory import LLMFactory
     from src.impl.impl_litellm import LiteLLMToolsLLM
 
     cfg_file = tmp_path / "llm.yml"
@@ -123,8 +127,8 @@ def test_factory_tools_returns_litellm(tmp_path: Path):
 
 
 def test_factory_tools_returns_ollama(tmp_path: Path):
+    from src.config import load_llm_config
     from src.factory import LLMFactory
-    from src.config import load_llm_config, LLMConfig, LLMTypeConfig
     from src.impl.impl_ollama import OllamaToolsLLM
 
     yaml = textwrap.dedent("""\
@@ -163,8 +167,8 @@ def test_factory_tools_returns_ollama(tmp_path: Path):
 
 
 def test_factory_invalid_impl_raises(tmp_path: Path):
-    from src.factory import LLMFactory
     from src.config import LLMConfig, LLMTypeConfig
+    from src.factory import LLMFactory
 
     bad_cfg = LLMConfig(
         general=LLMTypeConfig(implementation="bogus", model="x"),
@@ -181,8 +185,8 @@ def test_factory_invalid_impl_raises(tmp_path: Path):
 
 def test_factory_tools_cli_raises(tmp_path: Path):
     """CLI does not support tool use — should raise ValueError."""
-    from src.factory import LLMFactory
     from src.config import LLMConfig, LLMTypeConfig
+    from src.factory import LLMFactory
 
     cfg = LLMConfig(
         general=LLMTypeConfig(implementation="ollama", model="x"),

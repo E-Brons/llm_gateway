@@ -1,7 +1,6 @@
 """Tests for retry_text_completion and retry_image_generation helpers."""
+
 import pytest
-
-
 
 # ---------------------------------------------------------------------------
 # retry_text_completion

@@ -1,42 +1,53 @@
 """Factory for constructing LLM interface instances from configuration."""
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
 from .config import LLMConfig, LLMTypeConfig, load_llm_config
-from .types import GeneralLLM, ImageGenLLM, ImageInspectorLLM, ReasoningLLM, TextGenLLM, ToolsLLM
-
-from .impl.impl_ollama import (
-    OllamaGeneralLLM, OllamaImageGenLLM, OllamaImageInspectorLLM,
-    OllamaReasoningLLM, OllamaTextGenLLM, OllamaToolsLLM,
+from .impl.impl_cli import (
+    CLIGeneralLLM,
+    CLIImageInspectorLLM,
+    CLIReasoningLLM,
+    CLITextGenLLM,
 )
 from .impl.impl_litellm import (
-    LiteLLMGeneralLLM, LiteLLMImageGenLLM, LiteLLMImageInspectorLLM,
-    LiteLLMReasoningLLM, LiteLLMTextGenLLM, LiteLLMToolsLLM,
+    LiteLLMGeneralLLM,
+    LiteLLMImageGenLLM,
+    LiteLLMImageInspectorLLM,
+    LiteLLMReasoningLLM,
+    LiteLLMTextGenLLM,
+    LiteLLMToolsLLM,
 )
-from .impl.impl_cli import (
-    CLIGeneralLLM, CLIImageInspectorLLM, CLIReasoningLLM, CLITextGenLLM,
+from .impl.impl_ollama import (
+    OllamaGeneralLLM,
+    OllamaImageGenLLM,
+    OllamaImageInspectorLLM,
+    OllamaReasoningLLM,
+    OllamaTextGenLLM,
+    OllamaToolsLLM,
 )
+from .types import GeneralLLM, ImageGenLLM, ImageInspectorLLM, ReasoningLLM, TextGenLLM, ToolsLLM
 
 _REGISTRY: dict[tuple[str, str], type] = {
-    ("general",        "ollama"):   OllamaGeneralLLM,
-    ("general",        "litellm"):  LiteLLMGeneralLLM,
-    ("general",        "cli"):      CLIGeneralLLM,
-    ("text_gen",       "ollama"):   OllamaTextGenLLM,
-    ("text_gen",       "litellm"):  LiteLLMTextGenLLM,
-    ("text_gen",       "cli"):      CLITextGenLLM,
-    ("reasoning",      "ollama"):   OllamaReasoningLLM,
-    ("reasoning",      "litellm"):  LiteLLMReasoningLLM,
-    ("reasoning",      "cli"):      CLIReasoningLLM,
-    ("image_gen",      "ollama"):   OllamaImageGenLLM,
-    ("image_gen",      "litellm"):  LiteLLMImageGenLLM,
+    ("general", "ollama"): OllamaGeneralLLM,
+    ("general", "litellm"): LiteLLMGeneralLLM,
+    ("general", "cli"): CLIGeneralLLM,
+    ("text_gen", "ollama"): OllamaTextGenLLM,
+    ("text_gen", "litellm"): LiteLLMTextGenLLM,
+    ("text_gen", "cli"): CLITextGenLLM,
+    ("reasoning", "ollama"): OllamaReasoningLLM,
+    ("reasoning", "litellm"): LiteLLMReasoningLLM,
+    ("reasoning", "cli"): CLIReasoningLLM,
+    ("image_gen", "ollama"): OllamaImageGenLLM,
+    ("image_gen", "litellm"): LiteLLMImageGenLLM,
     # CLI does not support image generation
-    ("image_inspector","ollama"):   OllamaImageInspectorLLM,
-    ("image_inspector","litellm"):  LiteLLMImageInspectorLLM,
-    ("image_inspector","cli"):      CLIImageInspectorLLM,
-    ("tools",          "ollama"):   OllamaToolsLLM,
-    ("tools",          "litellm"):  LiteLLMToolsLLM,
+    ("image_inspector", "ollama"): OllamaImageInspectorLLM,
+    ("image_inspector", "litellm"): LiteLLMImageInspectorLLM,
+    ("image_inspector", "cli"): CLIImageInspectorLLM,
+    ("tools", "ollama"): OllamaToolsLLM,
+    ("tools", "litellm"): LiteLLMToolsLLM,
     # CLI does not support tool use
 }
 

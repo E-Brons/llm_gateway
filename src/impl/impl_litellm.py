@@ -1,4 +1,5 @@
 """LiteLLM implementations of all LLM interface types."""
+
 from __future__ import annotations
 
 import base64
@@ -21,8 +22,9 @@ from ..types import (
 )
 
 
-def _apply_common(kwargs: dict, temperature: float | None,
-                  max_tokens: int | None, response_schema: dict | None) -> None:
+def _apply_common(
+    kwargs: dict, temperature: float | None, max_tokens: int | None, response_schema: dict | None
+) -> None:
     if temperature is not None:
         kwargs["temperature"] = temperature
     if max_tokens is not None:
@@ -32,11 +34,22 @@ def _apply_common(kwargs: dict, temperature: float | None,
 
 
 class LiteLLMGeneralLLM(GeneralLLM):
-    def __init__(self, model: str, timeout: int = 60, api_base: str | None = None,
-                 temperature: float | None = None, max_tokens: int | None = None,
-                 response_schema: dict | None = None) -> None:
-        super().__init__(model=model, timeout=timeout, temperature=temperature,
-                         max_tokens=max_tokens, response_schema=response_schema)
+    def __init__(
+        self,
+        model: str,
+        timeout: int = 60,
+        api_base: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        super().__init__(
+            model=model,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+        )
         self.api_base = api_base
         reset_litellm_client()
 
@@ -48,16 +61,31 @@ class LiteLLMGeneralLLM(GeneralLLM):
         _apply_common(kwargs, self.temperature, self.max_tokens, self.response_schema)
         response = litellm.completion(**kwargs)
         content = response.choices[0].message.content or ""
-        return TextResponse(content=content, model=self.model,
-                            duration_ms=(time.monotonic() - t0) * 1000, attempts=1)
+        return TextResponse(
+            content=content,
+            model=self.model,
+            duration_ms=(time.monotonic() - t0) * 1000,
+            attempts=1,
+        )
 
 
 class LiteLLMTextGenLLM(TextGenLLM):
-    def __init__(self, model: str, timeout: int = 120, api_base: str | None = None,
-                 temperature: float | None = None, max_tokens: int | None = None,
-                 response_schema: dict | None = None) -> None:
-        super().__init__(model=model, timeout=timeout, temperature=temperature,
-                         max_tokens=max_tokens, response_schema=response_schema)
+    def __init__(
+        self,
+        model: str,
+        timeout: int = 120,
+        api_base: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        super().__init__(
+            model=model,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+        )
         self.api_base = api_base
         reset_litellm_client()
 
@@ -70,21 +98,32 @@ class LiteLLMTextGenLLM(TextGenLLM):
             response = litellm.completion(**kwargs)
             return response.choices[0].message.content or "", self.model
 
-        return retry_text_completion(call_fn, messages, max_retries, self.model,
-                                     on_transfer_error=reset_litellm_client)
+        return retry_text_completion(
+            call_fn, messages, max_retries, self.model, on_transfer_error=reset_litellm_client
+        )
 
 
 class LiteLLMReasoningLLM(ReasoningLLM):
-    def __init__(self, model: str, timeout: int = 300, api_base: str | None = None,
-                 temperature: float | None = None, max_tokens: int | None = None,
-                 response_schema: dict | None = None) -> None:
-        super().__init__(model=model, timeout=timeout, temperature=temperature,
-                         max_tokens=max_tokens, response_schema=response_schema)
+    def __init__(
+        self,
+        model: str,
+        timeout: int = 300,
+        api_base: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        super().__init__(
+            model=model,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+        )
         self.api_base = api_base
         reset_litellm_client()
 
-    def complete(self, messages: list[dict], *,
-                 thinking_budget: int | None = None) -> TextResponse:
+    def complete(self, messages: list[dict], *, thinking_budget: int | None = None) -> TextResponse:
         t0 = time.monotonic()
         kwargs: dict = {"model": self.model, "messages": messages, "timeout": self.timeout}
         if self.api_base:
@@ -94,24 +133,45 @@ class LiteLLMReasoningLLM(ReasoningLLM):
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
         response = litellm.completion(**kwargs)
         content = response.choices[0].message.content or ""
-        return TextResponse(content=content, model=self.model,
-                            duration_ms=(time.monotonic() - t0) * 1000, attempts=1)
+        return TextResponse(
+            content=content,
+            model=self.model,
+            duration_ms=(time.monotonic() - t0) * 1000,
+            attempts=1,
+        )
 
 
 class LiteLLMImageGenLLM(ImageGenLLM):
-    def __init__(self, model: str, timeout: int = 300, api_base: str | None = None,
-                 temperature: float | None = None, max_tokens: int | None = None,
-                 response_schema: dict | None = None) -> None:
-        super().__init__(model=model, timeout=timeout, temperature=temperature,
-                         max_tokens=max_tokens, response_schema=response_schema)
+    def __init__(
+        self,
+        model: str,
+        timeout: int = 300,
+        api_base: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        super().__init__(
+            model=model,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+        )
         self.api_base = api_base
         reset_litellm_client()
 
-    def generate(self, prompt: str, *, max_retries: int = 3,
-                 validator: Callable[[bytes], bool] | None = None,
-                 reference_images: list[bytes] | None = None,
-                 width: int = 128, height: int = 128,
-                 seed: int | None = None) -> ImageResponse:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_retries: int = 3,
+        validator: Callable[[bytes], bool] | None = None,
+        reference_images: list[bytes] | None = None,
+        width: int = 128,
+        height: int = 128,
+        seed: int | None = None,
+    ) -> ImageResponse:
         def call_fn() -> tuple[bytes, str]:
             kwargs: dict = {"model": self.model, "prompt": prompt, "timeout": self.timeout}
             if self.api_base:
@@ -126,23 +186,38 @@ class LiteLLMImageGenLLM(ImageGenLLM):
 
 
 class LiteLLMImageInspectorLLM(ImageInspectorLLM):
-    def __init__(self, model: str, timeout: int = 90, api_base: str | None = None,
-                 temperature: float | None = None, max_tokens: int | None = None,
-                 response_schema: dict | None = None) -> None:
-        super().__init__(model=model, timeout=timeout, temperature=temperature,
-                         max_tokens=max_tokens, response_schema=response_schema)
+    def __init__(
+        self,
+        model: str,
+        timeout: int = 90,
+        api_base: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        super().__init__(
+            model=model,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+        )
         self.api_base = api_base
         reset_litellm_client()
 
-    def inspect(self, image: bytes, system: str, prompt: str, *,
-                max_retries: int = 3) -> TextResponse:
+    def inspect(
+        self, image: bytes, system: str, prompt: str, *, max_retries: int = 3
+    ) -> TextResponse:
         b64 = base64.b64encode(image).decode("ascii")
         messages: list[dict] = [
             {"role": "system", "content": system},
-            {"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                {"type": "text", "text": prompt},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                    {"type": "text", "text": prompt},
+                ],
+            },
         ]
 
         def call_fn(msgs: list[dict]) -> tuple[str, str]:
@@ -153,27 +228,42 @@ class LiteLLMImageInspectorLLM(ImageInspectorLLM):
             response = litellm.completion(**kwargs)
             return response.choices[0].message.content or "", self.model
 
-        return retry_text_completion(call_fn, messages, max_retries, self.model,
-                                     on_transfer_error=reset_litellm_client)
+        return retry_text_completion(
+            call_fn, messages, max_retries, self.model, on_transfer_error=reset_litellm_client
+        )
 
 
 class LiteLLMToolsLLM(ToolsLLM):
     """LiteLLM implementation of ToolsLLM (function/tool calling)."""
 
-    def __init__(self, model: str, timeout: int = 120, api_base: str | None = None,
-                 temperature: float | None = None, max_tokens: int | None = None,
-                 response_schema: dict | None = None) -> None:
-        super().__init__(model=model, timeout=timeout, temperature=temperature,
-                         max_tokens=max_tokens, response_schema=response_schema)
+    def __init__(
+        self,
+        model: str,
+        timeout: int = 120,
+        api_base: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        super().__init__(
+            model=model,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+        )
         self.api_base = api_base
         reset_litellm_client()
 
-    def complete(self, messages: list[dict], tools: list[dict], *,
-                 max_retries: int = 3) -> ToolCallResponse:
+    def complete(
+        self, messages: list[dict], tools: list[dict], *, max_retries: int = 3
+    ) -> ToolCallResponse:
         t0 = time.monotonic()
         kwargs: dict = {
-            "model": self.model, "messages": messages,
-            "tools": tools, "timeout": self.timeout,
+            "model": self.model,
+            "messages": messages,
+            "tools": tools,
+            "timeout": self.timeout,
         }
         if self.api_base:
             kwargs["api_base"] = self.api_base
@@ -193,13 +283,18 @@ class LiteLLMToolsLLM(ToolsLLM):
                     args = _json.loads(args)
                 except Exception:
                     args = {}
-            tool_calls.append(ToolCall(
-                id=tc.id or f"call_{tc.function.name}",
-                name=tc.function.name,
-                arguments=args or {},
-            ))
+            tool_calls.append(
+                ToolCall(
+                    id=tc.id or f"call_{tc.function.name}",
+                    name=tc.function.name,
+                    arguments=args or {},
+                )
+            )
 
         return ToolCallResponse(
-            content=content, tool_calls=tool_calls,
-            model=self.model, duration_ms=duration_ms, attempts=1,
+            content=content,
+            tool_calls=tool_calls,
+            model=self.model,
+            duration_ms=duration_ms,
+            attempts=1,
         )

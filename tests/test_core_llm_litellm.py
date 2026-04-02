@@ -1,4 +1,5 @@
 """Tests for LiteLLM implementations of all LLM interface types."""
+
 import base64
 import json
 from unittest.mock import MagicMock, patch
@@ -42,11 +43,14 @@ def _mock_image_generation(b64: str) -> MagicMock:
 # LiteLLMGeneralLLM
 # ---------------------------------------------------------------------------
 
+
 def test_litellm_general_happy_path():
     from src.impl.impl_litellm import LiteLLMGeneralLLM
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("hello")):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("hello")
+        ):
             llm = LiteLLMGeneralLLM(model="gpt-4o")
             result = llm.complete([{"role": "user", "content": "hi"}])
 
@@ -58,7 +62,9 @@ def test_litellm_general_api_base_passed():
     from src.impl.impl_litellm import LiteLLMGeneralLLM
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("ok")) as mock_c:
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("ok")
+        ) as mock_c:
             llm = LiteLLMGeneralLLM(model="ollama/phi3", api_base="http://localhost:11434")
             llm.complete([{"role": "user", "content": "x"}])
 
@@ -69,11 +75,14 @@ def test_litellm_general_api_base_passed():
 # LiteLLMTextGenLLM
 # ---------------------------------------------------------------------------
 
+
 def test_litellm_text_gen_happy_path():
     from src.impl.impl_litellm import LiteLLMTextGenLLM
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("result")):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("result")
+        ):
             llm = LiteLLMTextGenLLM(model="gpt-4o")
             result = llm.complete([{"role": "user", "content": "x"}])
 
@@ -108,11 +117,14 @@ def test_litellm_text_gen_transfer_encoding_triggers_reset():
 # LiteLLMReasoningLLM
 # ---------------------------------------------------------------------------
 
+
 def test_litellm_reasoning_no_thinking_budget():
     from src.impl.impl_litellm import LiteLLMReasoningLLM
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("deep")) as mock_c:
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("deep")
+        ) as mock_c:
             llm = LiteLLMReasoningLLM(model="claude-opus-4-6")
             result = llm.complete([{"role": "user", "content": "x"}])
 
@@ -124,7 +136,9 @@ def test_litellm_reasoning_with_thinking_budget():
     from src.impl.impl_litellm import LiteLLMReasoningLLM
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("thought")) as mock_c:
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("thought")
+        ) as mock_c:
             llm = LiteLLMReasoningLLM(model="claude-opus-4-6")
             result = llm.complete([{"role": "user", "content": "x"}], thinking_budget=2048)
 
@@ -136,6 +150,7 @@ def test_litellm_reasoning_with_thinking_budget():
 # LiteLLMImageGenLLM
 # ---------------------------------------------------------------------------
 
+
 def test_litellm_image_gen_happy_path():
     from src.impl.impl_litellm import LiteLLMImageGenLLM
 
@@ -143,7 +158,10 @@ def test_litellm_image_gen_happy_path():
     b64 = base64.b64encode(raw).decode()
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.image_generation", return_value=_mock_image_generation(b64)):
+        with patch(
+            "src.impl.impl_litellm.litellm.image_generation",
+            return_value=_mock_image_generation(b64),
+        ):
             llm = LiteLLMImageGenLLM(model="dall-e-3")
             result = llm.generate("a sunset", max_retries=1)
 
@@ -168,11 +186,14 @@ def test_litellm_image_gen_no_data_retries_raises():
 # LiteLLMImageInspectorLLM
 # ---------------------------------------------------------------------------
 
+
 def test_litellm_image_inspector_multimodal_format():
     from src.impl.impl_litellm import LiteLLMImageInspectorLLM
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch("src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("a face")) as mock_c:
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("a face")
+        ) as mock_c:
             llm = LiteLLMImageInspectorLLM(model="claude-sonnet-4-6")
             result = llm.inspect(b"imgdata", "You are an analyst.", "Describe.")
 
@@ -208,9 +229,11 @@ _SAMPLE_TOOLS = [
 def test_litellm_tools_happy_path():
     from src.impl.impl_litellm import LiteLLMToolsLLM
 
-    mock_resp = _mock_tool_completion([
-        {"id": "call_abc", "name": "get_weather", "arguments": {"city": "Paris"}},
-    ])
+    mock_resp = _mock_tool_completion(
+        [
+            {"id": "call_abc", "name": "get_weather", "arguments": {"city": "Paris"}},
+        ]
+    )
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
         with patch("src.impl.impl_litellm.litellm.completion", return_value=mock_resp):
@@ -229,9 +252,11 @@ def test_litellm_tools_happy_path():
 def test_litellm_tools_passes_tools_to_litellm():
     from src.impl.impl_litellm import LiteLLMToolsLLM
 
-    mock_resp = _mock_tool_completion([
-        {"id": "c1", "name": "get_weather", "arguments": {"city": "NYC"}},
-    ])
+    mock_resp = _mock_tool_completion(
+        [
+            {"id": "c1", "name": "get_weather", "arguments": {"city": "NYC"}},
+        ]
+    )
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
         with patch("src.impl.impl_litellm.litellm.completion", return_value=mock_resp) as mock_c:
@@ -245,9 +270,11 @@ def test_litellm_tools_text_response_alongside_tool_calls():
     """Model may return both content and tool calls."""
     from src.impl.impl_litellm import LiteLLMToolsLLM
 
-    mock_resp = _mock_tool_completion([
-        {"id": "c1", "name": "get_weather", "arguments": {"city": "Rome"}},
-    ])
+    mock_resp = _mock_tool_completion(
+        [
+            {"id": "c1", "name": "get_weather", "arguments": {"city": "Rome"}},
+        ]
+    )
     mock_resp.choices[0].message.content = "Sure, let me check."
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
