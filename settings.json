@@ -1,0 +1,37 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 4096,
+    "allow_external_port": false
+  },
+  "timeout_sec": 600,
+  "parallel": {
+    "ollama": 3,
+    "claude": 5,
+    "litellm": 5
+  },
+  "max_retries": 3,
+  "queue": {
+    "max_pending": 50,
+    "timeout_sec": 600
+  },
+  "defaults": {
+    "ollama": {
+      "temperature": 0.8,
+      "ctx_size": 4096
+    },
+    "claude": {
+      "temperature": null,
+      "ctx_size": null
+    },
+    "litellm": {
+      "temperature": 1.0,
+      "ctx_size": 4096
+    }
+  },
+  "logging": {
+    "level": "info",
+    "log_requests": false,
+    "path": "/tmp/%Y-%m-%d_%H-%M-server-log"
+  }
+}

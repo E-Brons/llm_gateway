@@ -1,0 +1,280 @@
+"""FastAPI gateway server — exposes all LLM types over HTTP."""
+from __future__ import annotations
+
+import base64
+import json
+import logging
+import os
+from contextlib import asynccontextmanager
+from typing import Any
+
+import requests as _requests
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+from .config import LLMConfig, load_llm_config
+from .factory import LLMFactory
+
+logger = logging.getLogger("llm_gateway")
+
+_factory: LLMFactory | None = None
+_config: LLMConfig | None = None
+
+_TASK_CAPABILITY: dict[str, str] = {
+    "general":         "text",
+    "text_gen":        "text",
+    "reasoning":       "reasoning",
+    "image_gen":       "image_gen",
+    "image_inspector": "visual",
+    "tools":           "tools",
+}
+
+
+def _load_settings(base: str = "settings.json",
+                   override: str = "local/settings.json") -> dict:
+    """Merge settings.json with optional local/settings.json override."""
+    import json as _json
+    from pathlib import Path
+
+    def _deep_merge(b: dict, o: dict) -> dict:
+        r = {**b}
+        for k, v in o.items():
+            r[k] = _deep_merge(r[k], v) if k in r and isinstance(r[k], dict) and isinstance(v, dict) else v
+        return r
+
+    data: dict = {}
+    if Path(base).exists():
+        data = _json.loads(Path(base).read_text())
+    if Path(override).exists():
+        data = _deep_merge(data, _json.loads(Path(override).read_text()))
+    return data
+
+
+def _log_startup(
+    config: LLMConfig,
+    settings: dict,
+    config_path: str,
+    override_path: str,
+    override_active: bool,
+    host: str,
+    port: str,
+) -> None:
+    """Log the fully resolved configuration at startup."""
+    sep = "─" * 56
+
+    lines = [
+        "",
+        f"  LLM Gateway  starting up",
+        sep,
+        f"  Listen      {host}:{port}",
+        f"  Config      {config_path}",
+    ]
+
+    if override_active:
+        lines.append(f"  Override    {override_path}  (active)")
+    else:
+        lines.append(f"  Override    {override_path}  (not found — using base only)")
+
+    lines += [
+        sep,
+        "  LLM Config",
+        f"    general        {config.general.implementation} / {config.general.model}",
+        f"    text_gen       {config.text_gen.implementation} / {config.text_gen.model}",
+        f"    reasoning      {config.reasoning.implementation} / {config.reasoning.model}",
+        f"    image_gen      {config.image_gen.implementation} / {config.image_gen.model}",
+        f"    image_inspector {config.image_inspector.implementation} / {config.image_inspector.model}",
+        f"    tools          {config.tools.implementation} / {config.tools.model}",
+    ]
+
+    if settings:
+        lines += [
+            sep,
+            "  Settings",
+        ]
+        for line in json.dumps(settings, indent=4).splitlines():
+            lines.append(f"    {line}")
+
+    lines.append(sep)
+
+    for line in lines:
+        logger.info(line)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _factory, _config
+
+    config_path    = os.environ.get("LLM_GATEWAY_ROUTE", "llm_route.yml")
+    override_path  = os.environ.get("LLM_GATEWAY_ROUTE_LOCAL", "local/llm_route.yml")
+    host           = os.environ.get("LLM_GATEWAY_HOST", "127.0.0.1")
+    port           = os.environ.get("LLM_GATEWAY_PORT", "4096")
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
+
+    if not os.path.exists(config_path):
+        raise RuntimeError(
+            f"Base config not found: {config_path}\n"
+            "Ensure llm_route.yml exists at the project root or pass --config_file <PATH>."
+        )
+
+    override_active = os.path.exists(override_path)
+    _config = load_llm_config(config_path, override_path if override_active else None)
+    _factory = LLMFactory(_config)
+
+    settings = _load_settings()
+    _log_startup(_config, settings, config_path, override_path, override_active, host, port)
+
+    yield
+
+
+app = FastAPI(title="LLM Gateway", lifespan=lifespan)
+
+
+def _f() -> LLMFactory:
+    if _factory is None:
+        raise HTTPException(503, "Factory not initialised")
+    return _factory
+
+
+# ── Request models ─────────────────────────────────────────────────────────
+
+class MessageRequest(BaseModel):
+    messages: list[dict[str, Any]]
+    max_retries: int = 3
+
+
+class ReasoningRequest(BaseModel):
+    messages: list[dict[str, Any]]
+    thinking_budget: int | None = None
+
+
+class ImageGenRequest(BaseModel):
+    prompt: str
+    width: int = 128
+    height: int = 128
+    seed: int | None = None
+    max_retries: int = 3
+
+
+class ImageInspectRequest(BaseModel):
+    image_b64: str
+    system: str
+    prompt: str
+    max_retries: int = 3
+
+
+class ToolsRequest(BaseModel):
+    messages: list[dict[str, Any]]
+    tools: list[dict[str, Any]]
+    max_retries: int = 3
+
+
+# ── Routes ─────────────────────────────────────────────────────────────────
+
+@app.get("/health")
+def health() -> dict:
+    return {"status": "ok"}
+
+
+@app.get("/models")
+def list_models():
+    if _config is None:
+        raise HTTPException(503, "Config not loaded")
+
+    tasks = [
+        ("general",         _config.general),
+        ("text_gen",        _config.text_gen),
+        ("reasoning",       _config.reasoning),
+        ("image_gen",       _config.image_gen),
+        ("image_inspector", _config.image_inspector),
+        ("tools",           _config.tools),
+    ]
+
+    groups: dict[tuple[str, str], dict] = {}
+    ollama_url = "http://localhost:11434"
+    for task, cfg in tasks:
+        key = (cfg.model, cfg.implementation)
+        if key not in groups:
+            groups[key] = {
+                "model": cfg.model,
+                "implementation": cfg.implementation,
+                "tasks": [],
+                "capabilities": set(),
+            }
+        groups[key]["tasks"].append(task)
+        groups[key]["capabilities"].add(_TASK_CAPABILITY[task])
+        if cfg.implementation == "ollama" and cfg.ollama_url:
+            ollama_url = cfg.ollama_url
+
+    configured = [
+        {
+            "model": v["model"],
+            "implementation": v["implementation"],
+            "tasks": sorted(v["tasks"]),
+            "capabilities": sorted(v["capabilities"]),
+        }
+        for v in groups.values()
+    ]
+
+    ollama_pulled: list[str] = []
+    try:
+        resp = _requests.get(f"{ollama_url}/api/tags", timeout=5)
+        if resp.ok:
+            ollama_pulled = [m["name"] for m in resp.json().get("models", [])]
+    except Exception:
+        pass
+
+    for entry in configured:
+        if entry["implementation"] == "ollama":
+            bare = entry["model"].removeprefix("ollama/")
+            entry["available"] = any(
+                p == bare or p.startswith(bare + ":") or p == entry["model"]
+                for p in ollama_pulled
+            )
+
+    return {"configured": configured, "ollama_available": ollama_pulled}
+
+
+@app.post("/general")
+def general(req: MessageRequest):
+    return _f().general().complete(req.messages).model_dump()
+
+
+@app.post("/text_gen")
+def text_gen(req: MessageRequest):
+    return _f().text_gen().complete(req.messages, max_retries=req.max_retries).model_dump()
+
+
+@app.post("/reasoning")
+def reasoning(req: ReasoningRequest):
+    return _f().reasoning().complete(
+        req.messages, thinking_budget=req.thinking_budget
+    ).model_dump()
+
+
+@app.post("/image_gen")
+def image_gen(req: ImageGenRequest):
+    resp = _f().image_gen().generate(
+        req.prompt, width=req.width, height=req.height,
+        seed=req.seed, max_retries=req.max_retries,
+    )
+    return {
+        "image_b64": base64.b64encode(resp.image).decode(),
+        "model": resp.model, "duration_ms": resp.duration_ms,
+        "attempts": resp.attempts, "last_error": resp.last_error,
+    }
+
+
+@app.post("/image_inspector")
+def image_inspector(req: ImageInspectRequest):
+    image = base64.b64decode(req.image_b64)
+    return _f().image_inspector().inspect(
+        image, req.system, req.prompt, max_retries=req.max_retries
+    ).model_dump()
+
+
+@app.post("/tools")
+def tools(req: ToolsRequest):
+    return _f().tools().complete(
+        req.messages, req.tools, max_retries=req.max_retries
+    ).model_dump()

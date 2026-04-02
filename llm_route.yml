@@ -1,0 +1,35 @@
+# LLM Gateway — default routing configuration
+# Override individual fields by creating local/llm_route.yml with only the keys you want to change.
+# Full reference: llm_route.yml.example
+
+general:
+  implementation: ollama
+  model: ollama/phi3
+  ollama_url: http://localhost:11434
+
+text_gen:
+  implementation: ollama
+  model: ollama/phi3
+  ollama_url: http://localhost:11434
+  temperature: 0.3
+  max_tokens: 1024
+
+reasoning:
+  implementation: ollama
+  model: ollama/phi3
+  ollama_url: http://localhost:11434
+
+image_gen:
+  implementation: ollama
+  model: ollama/flux
+  ollama_url: http://localhost:11434
+
+image_inspector:
+  implementation: ollama
+  model: ollama/llava
+  ollama_url: http://localhost:11434
+
+tools:
+  implementation: ollama
+  model: ollama/phi3
+  ollama_url: http://localhost:11434
