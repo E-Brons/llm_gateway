@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# User-local config and CLI plugins (never commit)
+local/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Claude Code project files (keep settings.json)
+.claude/*
+!.claude/settings.json
+
+# IDEs
+.idea/
+.vscode/
+*.swp
