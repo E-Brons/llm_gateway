@@ -85,7 +85,11 @@ def _run_sanity_checks(factory: LLMFactory) -> None:
         (
             "image_gen",
             lambda: factory.image_gen().generate(
-                "a solid red square", width=32, height=32, max_retries=1
+                "a solid red square",
+                reference_images=[_minimal_png()],
+                width=32,
+                height=32,
+                max_retries=1,
             ),
         ),
         (
@@ -263,6 +267,7 @@ class ReasoningRequest(BaseModel):
 
 class ImageGenRequest(BaseModel):
     prompt: str
+    reference_images_b64: list[str] | None = None  # base64-encoded reference PNGs
     width: int = 128
     height: int = 128
     seed: int | None = None
@@ -433,11 +438,17 @@ def reasoning(req: ReasoningRequest):
 
 @app.post("/image_gen")
 def image_gen(req: ImageGenRequest):
+    reference_images = (
+        [base64.b64decode(b) for b in req.reference_images_b64]
+        if req.reference_images_b64
+        else None
+    )
     resp = (
         _f()
         .image_gen()
         .generate(
             req.prompt,
+            reference_images=reference_images,
             width=req.width,
             height=req.height,
             seed=req.seed,
