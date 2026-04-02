@@ -3,33 +3,31 @@
 # Full reference: llm_route.yml.example
 
 general:
-  implementation: ollama
-  model: ollama/phi3
-  ollama_url: http://localhost:11434
+  implementation: cli
+  model: claude-sonnet-4-6
 
 text_gen:
   implementation: ollama
-  model: ollama/phi3
+  model: phi3
   ollama_url: http://localhost:11434
   temperature: 0.3
   max_tokens: 1024
 
 reasoning:
-  implementation: ollama
-  model: ollama/phi3
-  ollama_url: http://localhost:11434
+  implementation: cli
+  model: claude-opus-4-6
 
 image_gen:
   implementation: ollama
-  model: ollama/flux
+  model: x/flux2-klein:4b
   ollama_url: http://localhost:11434
 
 image_inspector:
   implementation: ollama
-  model: ollama/llava
+  model: qwen2.5vl:7b
   ollama_url: http://localhost:11434
 
 tools:
   implementation: ollama
-  model: ollama/phi3
+  model: qwen3.5:9b
   ollama_url: http://localhost:11434
