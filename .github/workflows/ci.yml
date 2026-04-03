@@ -45,13 +45,13 @@ jobs:
     continue-on-error: true
     outputs:
       result: ${{ steps.run-tests.outcome }}
-    env:
-      # On self-hosted runners the default tool-cache path (/Users/runner) may not
-      # be writable. Point setup-python at the job's temp dir instead.
-      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        env:
+          # On self-hosted runners the default tool-cache path (/Users/runner) may not
+          # be writable. Point setup-python at the job's temp dir instead.
+          AGENT_TOOLSDIRECTORY: ${{ runner.temp }}
         with:
           python-version: "3.14"
       - name: Install package and test dependencies
