@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
 import os
+import struct
+import zlib
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 import requests as _requests
 from fastapi import FastAPI, HTTPException
@@ -29,6 +32,109 @@ _TASK_CAPABILITY: dict[str, str] = {
     "image_inspector": "visual",
     "tools": "tools",
 }
+
+_SANITY_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "answer",
+            "description": "Return the answer to the question.",
+            "parameters": {
+                "type": "object",
+                "properties": {"value": {"type": "string"}},
+                "required": ["value"],
+            },
+        },
+    }
+]
+
+
+def _minimal_png() -> bytes:
+    """1×1 red PNG for image inspector sanity check."""
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        body = tag + data
+        return (
+            struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+        )
+
+    ihdr = chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+    idat = chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00"))  # filter=0, R=255 G=0 B=0
+    iend = chunk(b"IEND", b"")
+    return b"\x89PNG\r\n\x1a\n" + ihdr + idat + iend
+
+
+def _run_sanity_checks(factory: LLMFactory) -> None:
+    """Run a minimal live call for each factory type and log the result."""
+    sep = "─" * 56
+    prompt = [{"role": "user", "content": "Reply with the single word: OK"}]
+
+    checks: list[tuple[str, Any]] = [
+        (
+            "general",
+            lambda: factory.general().complete(prompt),
+        ),
+        (
+            "text_gen",
+            lambda: factory.text_gen().complete(prompt, max_retries=1),
+        ),
+        (
+            "reasoning",
+            lambda: factory.reasoning().complete(prompt),
+        ),
+        (
+            "image_gen",
+            lambda: factory.image_gen().generate(
+                "a solid red square",
+                reference_images=[_minimal_png()],
+                width=32,
+                height=32,
+                max_retries=1,
+            ),
+        ),
+        (
+            "image_inspector",
+            lambda: factory.image_inspector().inspect(
+                _minimal_png(),
+                "You are a concise image analyst.",
+                "What is the dominant color? Reply in one word.",
+                max_retries=1,
+            ),
+        ),
+        (
+            "tools",
+            lambda: factory.tools().complete(
+                [{"role": "user", "content": "Use the answer tool: what is 1+1?"}],
+                _SANITY_TOOLS,
+                max_retries=1,
+            ),
+        ),
+    ]
+
+    logger.info(sep)
+    logger.info("  Sanity checks")
+    all_ok = True
+    for name, fn in checks:
+        try:
+            result = fn()
+            # Summarise the result
+            if hasattr(result, "image"):
+                summary = f"{len(result.image)} bytes"
+            elif hasattr(result, "tool_calls") and result.tool_calls:
+                tc = result.tool_calls[0]
+                summary = f"tool_call: {tc.name}({tc.arguments})"
+            else:
+                summary = (result.content or "").strip()[:60]
+            logger.info("    ✓  %-16s %s", name, summary)
+        except Exception as exc:
+            logger.warning("    ✗  %-16s FAILED: %s", name, exc)
+            all_ok = False
+
+    if all_ok:
+        logger.info("  all checks passed")
+    else:
+        logger.warning("  some checks failed — gateway may be partially functional")
+    logger.info(sep)
 
 
 def _load_settings(base: str = "settings.json", override: str = "local/settings.json") -> dict:
@@ -128,7 +234,13 @@ async def lifespan(app: FastAPI):
     settings = _load_settings()
     _log_startup(_config, settings, config_path, override_path, override_active, host, port)
 
+    # Run sanity checks in a background thread — server starts serving immediately.
+    loop = asyncio.get_event_loop()
+    sanity_task = loop.run_in_executor(None, _run_sanity_checks, _factory)
+
     yield
+
+    await sanity_task  # ensure clean shutdown if checks are still running
 
 
 app = FastAPI(title="LLM Gateway", lifespan=lifespan)
@@ -155,9 +267,11 @@ class ReasoningRequest(BaseModel):
 
 class ImageGenRequest(BaseModel):
     prompt: str
-    width: int = 128
-    height: int = 128
+    reference_images_b64: list[str] | None = None  # base64-encoded reference PNGs
+    width: int = 256
+    height: int = 256
     seed: int | None = None
+    optimize: Literal["quality", "normal", "fast"] = "normal"
     max_retries: int = 3
 
 
@@ -180,6 +294,74 @@ class ToolsRequest(BaseModel):
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/")
+def root() -> dict:
+    return {"name": "llm_gateway", "version": "1.0.0", "docs": "/docs"}
+
+
+# ── Compatibility shims ────────────────────────────────────────────────────────
+# Ollama and OpenAI-compatible discovery endpoints so local LLM clients
+# (OpenWebUI, Continue.dev, LM Studio, etc.) can auto-discover the gateway.
+
+
+@app.get("/api/tags")
+def ollama_tags():
+    """Ollama-compatible model list."""
+    if _config is None:
+        return {"models": []}
+    seen: set[str] = set()
+    models = []
+    for cfg in [
+        _config.general,
+        _config.text_gen,
+        _config.reasoning,
+        _config.image_gen,
+        _config.image_inspector,
+        _config.tools,
+    ]:
+        name = cfg.model.removeprefix("ollama/")
+        if name not in seen:
+            seen.add(name)
+            models.append(
+                {
+                    "name": name,
+                    "modified_at": "2026-01-01T00:00:00Z",
+                    "size": 0,
+                    "digest": "",
+                    "details": {
+                        "family": "llm_gateway",
+                        "parameter_size": "",
+                        "quantization_level": "",
+                    },
+                }
+            )
+    return {"models": models}
+
+
+@app.get("/v1/models")
+def openai_models():
+    """OpenAI-compatible model list."""
+    if _config is None:
+        return {"object": "list", "data": []}
+    seen: set[str] = set()
+    data = []
+    for task, cfg in [
+        ("general", _config.general),
+        ("text_gen", _config.text_gen),
+        ("reasoning", _config.reasoning),
+        ("image_gen", _config.image_gen),
+        ("image_inspector", _config.image_inspector),
+        ("tools", _config.tools),
+    ]:
+        model_id = cfg.model.removeprefix("ollama/")
+        if model_id not in seen:
+            seen.add(model_id)
+            data.append(
+                {"id": model_id, "object": "model", "created": 0, "owned_by": "llm_gateway"}
+            )
+    return {"object": "list", "data": data}
 
 
 @app.get("/models")
@@ -257,14 +439,22 @@ def reasoning(req: ReasoningRequest):
 
 @app.post("/image_gen")
 def image_gen(req: ImageGenRequest):
+    _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
+    reference_images = (
+        [base64.b64decode(b) for b in req.reference_images_b64]
+        if req.reference_images_b64
+        else None
+    )
     resp = (
         _f()
         .image_gen()
         .generate(
             req.prompt,
+            reference_images=reference_images,
             width=req.width,
             height=req.height,
             seed=req.seed,
+            num_inference_steps=_OPTIMIZE_STEPS[req.optimize],
             max_retries=req.max_retries,
         )
     )

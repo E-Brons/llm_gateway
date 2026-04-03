@@ -168,9 +168,10 @@ class LiteLLMImageGenLLM(ImageGenLLM):
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
         reference_images: list[bytes] | None = None,
-        width: int = 128,
-        height: int = 128,
+        width: int = 256,
+        height: int = 256,
         seed: int | None = None,
+        num_inference_steps: int | None = None,
     ) -> ImageResponse:
         def call_fn() -> tuple[bytes, str]:
             kwargs: dict = {"model": self.model, "prompt": prompt, "timeout": self.timeout}

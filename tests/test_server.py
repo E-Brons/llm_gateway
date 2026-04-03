@@ -71,8 +71,9 @@ def client(tmp_path):
 
     with patch.dict(os.environ, env):
         with patch("src.server.LLMFactory", return_value=mock_factory):
-            with TestClient(app) as c:
-                yield c, mock_factory
+            with patch("src.server._run_sanity_checks"):
+                with TestClient(app) as c:
+                    yield c, mock_factory
 
 
 # ── health ────────────────────────────────────────────────────────────────────
@@ -161,8 +162,37 @@ def test_image_gen(client):
     factory.image_gen.return_value.generate.return_value = _image()
     resp = c.post("/image_gen", json={"prompt": "a cat"})
     assert resp.status_code == 200
-    data = resp.json()
-    assert base64.b64decode(data["image_b64"]) == b"\x89PNG"
+    assert base64.b64decode(resp.json()["image_b64"]) == b"\x89PNG"
+    # reference_images should be None when not provided
+    factory.image_gen.return_value.generate.assert_called_once_with(
+        "a cat",
+        reference_images=None,
+        width=256,
+        height=256,
+        seed=None,
+        num_inference_steps=3,
+        max_retries=3,
+    )
+
+
+def test_image_gen_with_reference_images(client):
+    c, factory = client
+    factory.image_gen.return_value.generate.return_value = _image()
+    ref_b64 = base64.b64encode(b"ref_png").decode()
+    resp = c.post(
+        "/image_gen",
+        json={"prompt": "a cat", "reference_images_b64": [ref_b64], "width": 64, "height": 64},
+    )
+    assert resp.status_code == 200
+    factory.image_gen.return_value.generate.assert_called_once_with(
+        "a cat",
+        reference_images=[b"ref_png"],
+        width=64,
+        height=64,
+        seed=None,
+        num_inference_steps=3,
+        max_retries=3,
+    )
 
 
 def test_image_inspector(client):
@@ -241,6 +271,7 @@ def test_local_override_loaded(tmp_path):
         },
     ):
         with patch("src.server.LLMFactory", return_value=mock_factory):
-            with TestClient(app) as c:
-                resp = c.get("/health")
-                assert resp.status_code == 200
+            with patch("src.server._run_sanity_checks"):
+                with TestClient(app) as c:
+                    resp = c.get("/health")
+                    assert resp.status_code == 200
