@@ -47,6 +47,9 @@ jobs:
       result: ${{ steps.run-tests.outcome }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
       - name: Install package and test dependencies
         run: pip install -e ".[test]"
       - name: Run integration tests
