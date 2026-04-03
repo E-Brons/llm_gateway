@@ -303,6 +303,7 @@ def test_ollama_image_gen_size_and_steps_integration(ollama_image_model, ollama_
     """Verify that width/height and steps (optimize) are actually honoured by Ollama."""
     import struct
     import time
+
     from src.impl.impl_ollama import OllamaImageGenLLM
 
     def png_dimensions(data: bytes) -> tuple[int, int]:
