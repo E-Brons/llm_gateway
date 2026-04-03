@@ -35,3 +35,40 @@ jobs:
         run: pip install -e ".[test]"
       - name: Run unit tests
         run: pytest tests/ -m "not integration" --cov=src --cov-report=term-missing --cov-fail-under=85
+
+  integration-test:
+    name: Integration Tests
+    runs-on: self-hosted
+    needs: lint
+    # Allow the job to "fail" when no self-hosted runner is available without
+    # blocking CI. Real test failures are caught by the integration-gate job below.
+    continue-on-error: true
+    outputs:
+      result: ${{ steps.run-tests.outcome }}
+    env:
+      # On self-hosted runners the default tool-cache path (/Users/runner) may not
+      # be writable. Point setup-python at the job's temp dir instead.
+      AGENT_TOOLSDIRECTORY: ${{ runner.temp }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install package and test dependencies
+        run: pip install -e ".[test]"
+      - name: Run integration tests
+        id: run-tests
+        run: pytest tests/ -m "integration" -v
+
+  integration-gate:
+    name: Integration Test Gate
+    runs-on: ubuntu-latest
+    needs: integration-test
+    # 'result' is empty when no runner was found and no steps ran — skip in that case.
+    if: needs.integration-test.outputs.result != ''
+    steps:
+      - name: Fail if integration tests failed
+        if: needs.integration-test.outputs.result == 'failure'
+        run: |
+          echo "Integration tests failed."
+          exit 1
