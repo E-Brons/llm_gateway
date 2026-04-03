@@ -35,3 +35,29 @@ jobs:
         run: pip install -e ".[test]"
       - name: Run unit tests
         run: pytest tests/ -m "not integration" --cov=src --cov-report=term-missing --cov-fail-under=85
+
+  check-runner:
+    name: Check Self-Hosted Runner Availability
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh api /repos/${{ github.repository }}/actions/runners \
+            --jq '[.runners[] | select(.status == "online" and (.labels[] | .name == "self-hosted"))] | length')
+          echo "available=$([[ $count -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  integration-test:
+    name: Integration Tests
+    runs-on: self-hosted
+    needs: [lint, check-runner]
+    if: needs.check-runner.outputs.available == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install package and test dependencies
+        run: pip install -e ".[test]"
+      - name: Run integration tests
+        run: pytest tests/ -m "integration" -v
