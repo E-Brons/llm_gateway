@@ -10,7 +10,7 @@ import os
 import struct
 import zlib
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 import requests as _requests
 from fastapi import FastAPI, HTTPException
@@ -268,9 +268,10 @@ class ReasoningRequest(BaseModel):
 class ImageGenRequest(BaseModel):
     prompt: str
     reference_images_b64: list[str] | None = None  # base64-encoded reference PNGs
-    width: int = 128
-    height: int = 128
+    width: int = 256
+    height: int = 256
     seed: int | None = None
+    optimize: Literal["quality", "normal", "fast"] = "normal"
     max_retries: int = 3
 
 
@@ -438,6 +439,7 @@ def reasoning(req: ReasoningRequest):
 
 @app.post("/image_gen")
 def image_gen(req: ImageGenRequest):
+    _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
     reference_images = (
         [base64.b64decode(b) for b in req.reference_images_b64]
         if req.reference_images_b64
@@ -452,6 +454,7 @@ def image_gen(req: ImageGenRequest):
             width=req.width,
             height=req.height,
             seed=req.seed,
+            num_inference_steps=_OPTIMIZE_STEPS[req.optimize],
             max_retries=req.max_retries,
         )
     )

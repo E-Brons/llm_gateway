@@ -249,9 +249,10 @@ class OllamaImageGenLLM(ImageGenLLM):
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
         reference_images: list[bytes] | None = None,
-        width: int = 128,
-        height: int = 128,
+        width: int = 256,
+        height: int = 256,
         seed: int | None = None,
+        num_inference_steps: int | None = None,
     ) -> ImageResponse:
         images_b64 = (
             [base64.b64encode(img).decode("ascii") for img in reference_images]
@@ -264,20 +265,15 @@ class OllamaImageGenLLM(ImageGenLLM):
                 "model": _bare_model(self.model),
                 "prompt": prompt,
                 "stream": False,
+                "width": width,
+                "height": height,
             }
+            if seed is not None:
+                payload["seed"] = seed
+            if num_inference_steps is not None:
+                payload["steps"] = num_inference_steps
             if images_b64:
                 payload["images"] = images_b64
-            options = _build_options(self.temperature, self.max_tokens)
-            if width:
-                options["width"] = width
-            if height:
-                options["height"] = height
-            if seed is not None:
-                options["seed"] = seed
-            if options:
-                payload["options"] = options
-            if self.response_schema is not None:
-                payload["format"] = self.response_schema
 
             resp = requests.post(
                 f"{self.ollama_url}/api/generate", json=payload, timeout=self.timeout
@@ -285,14 +281,11 @@ class OllamaImageGenLLM(ImageGenLLM):
             resp.raise_for_status()
             data = resp.json()
 
-            img_b64: str | None = None
-            if "images" in data and data["images"]:
-                img_b64 = data["images"][0]
-            elif "image" in data:
-                img_b64 = data["image"]
-            if not img_b64:
+            imgs = data.get("images") or []
+            b64 = imgs[0] if imgs else data.get("image")
+            if not b64:
                 return b"", data.get("model", self.model)
-            return base64.b64decode(img_b64), data.get("model", self.model)
+            return base64.b64decode(b64), data.get("model", self.model)
 
         return retry_image_generation(call_fn, max_retries, self.model, validator=validator)
 

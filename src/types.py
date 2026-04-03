@@ -107,9 +107,10 @@ class ImageGenLLM(ABC):
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
         reference_images: list[bytes] | None = None,
-        width: int = 128,
-        height: int = 128,
+        width: int = 256,
+        height: int = 256,
         seed: int | None = None,
+        num_inference_steps: int | None = None,
     ) -> "ImageResponse":  # noqa: F821
         """Generate an image from *prompt* and return an ImageResponse."""
 

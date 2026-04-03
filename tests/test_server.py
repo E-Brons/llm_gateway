@@ -165,7 +165,7 @@ def test_image_gen(client):
     assert base64.b64decode(resp.json()["image_b64"]) == b"\x89PNG"
     # reference_images should be None when not provided
     factory.image_gen.return_value.generate.assert_called_once_with(
-        "a cat", reference_images=None, width=128, height=128, seed=None, max_retries=3
+        "a cat", reference_images=None, width=256, height=256, seed=None, num_inference_steps=3, max_retries=3
     )
 
 
@@ -179,7 +179,7 @@ def test_image_gen_with_reference_images(client):
     )
     assert resp.status_code == 200
     factory.image_gen.return_value.generate.assert_called_once_with(
-        "a cat", reference_images=[b"ref_png"], width=64, height=64, seed=None, max_retries=3
+        "a cat", reference_images=[b"ref_png"], width=64, height=64, seed=None, num_inference_steps=3, max_retries=3
     )
 
 

@@ -173,12 +173,13 @@ def test_ollama_image_gen_width_height_seed():
         "src.impl.impl_ollama.requests.post", return_value=_image_gen_response(b64)
     ) as mock_post:
         llm = OllamaImageGenLLM(model="flux", ollama_url=_OLLAMA_URL)
-        llm.generate("x", max_retries=1, width=256, height=256, seed=42)
+        llm.generate("x", max_retries=1, width=256, height=512, seed=42, num_inference_steps=2)
 
     payload = mock_post.call_args[1]["json"]
-    assert payload["options"]["width"] == 256
-    assert payload["options"]["height"] == 256
-    assert payload["options"]["seed"] == 42
+    assert payload["width"] == 256
+    assert payload["height"] == 512
+    assert payload["seed"] == 42
+    assert payload["steps"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -291,3 +292,39 @@ def test_ollama_tools_generates_id_when_missing():
         result = llm.complete([{"role": "user", "content": "x"}], _SAMPLE_TOOLS)
 
     assert result.tool_calls[0].id != ""
+
+
+# ---------------------------------------------------------------------------
+# OllamaImageGenLLM — integration tests (require live Ollama)
+# ---------------------------------------------------------------------------
+
+
+def test_ollama_image_gen_size_and_steps_integration(ollama_image_model, ollama_url):
+    """Verify that width/height and steps (optimize) are actually honoured by Ollama."""
+    import struct
+    import time
+    from src.impl.impl_ollama import OllamaImageGenLLM
+
+    def png_dimensions(data: bytes) -> tuple[int, int]:
+        """Read width/height from PNG IHDR chunk (bytes 16-24)."""
+        assert data[:8] == b"\x89PNG\r\n\x1a\n", "Not a PNG"
+        w, h = struct.unpack(">II", data[16:24])
+        return w, h
+
+    llm = OllamaImageGenLLM(model=ollama_image_model, ollama_url=ollama_url, timeout=120)
+
+    # --- size ---
+    resp = llm.generate("a red circle", width=512, height=256, num_inference_steps=4)
+    w, h = png_dimensions(resp.image)
+    assert (w, h) == (512, 256), f"Expected 512x256, got {w}x{h}"
+
+    # --- steps affect speed ---
+    timings = {}
+    for steps, label in [(4, "quality"), (3, "normal"), (2, "fast")]:
+        t0 = time.monotonic()
+        llm.generate("a red circle", width=256, height=256, num_inference_steps=steps)
+        timings[label] = time.monotonic() - t0
+
+    assert timings["fast"] < timings["quality"], (
+        f"fast ({timings['fast']:.2f}s) should be faster than quality ({timings['quality']:.2f}s)"
+    )
