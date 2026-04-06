@@ -1,6 +1,7 @@
 """Shared pytest fixtures for llm_gateway tests."""
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -71,3 +72,14 @@ def ollama_image_model(ollama_url: str, _ollama_model_list: list[str]) -> str:
         if any(kw in name.lower() for kw in _IMAGE_KEYWORDS):
             return name
     pytest.skip("No image generation model available on Ollama")
+
+
+@pytest.fixture(scope="session")
+def cli_available() -> None:
+    """Skip if the `claude` CLI is not installed or not authenticated."""
+    try:
+        proc = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=10)
+        if proc.returncode != 0:
+            pytest.skip("claude CLI not available")
+    except FileNotFoundError, subprocess.TimeoutExpired:
+        pytest.skip("claude CLI not found")
