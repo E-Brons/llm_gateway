@@ -258,12 +258,14 @@ def _f() -> LLMFactory:
 class MessageRequest(BaseModel):
     messages: list[dict[str, Any]]
     max_retries: int = 3
+    temperature: float | None = None
     response_schema: dict[str, Any] | None = None
 
 
 class ReasoningRequest(BaseModel):
     messages: list[dict[str, Any]]
     thinking_budget: int | None = None
+    temperature: float | None = None
     response_schema: dict[str, Any] | None = None
 
 
@@ -282,6 +284,7 @@ class ImageInspectRequest(BaseModel):
     system: str
     prompt: str
     max_retries: int = 3
+    temperature: float | None = None
     response_schema: dict[str, Any] | None = None
 
 
@@ -427,7 +430,12 @@ def list_models():
 
 @app.post("/general")
 def general(req: MessageRequest):
-    return _f().general().complete(req.messages, response_schema=req.response_schema).model_dump()
+    return (
+        _f()
+        .general()
+        .complete(req.messages, temperature=req.temperature, response_schema=req.response_schema)
+        .model_dump()
+    )
 
 
 @app.post("/text_gen")
@@ -435,7 +443,12 @@ def text_gen(req: MessageRequest):
     return (
         _f()
         .text_gen()
-        .complete(req.messages, max_retries=req.max_retries, response_schema=req.response_schema)
+        .complete(
+            req.messages,
+            max_retries=req.max_retries,
+            temperature=req.temperature,
+            response_schema=req.response_schema,
+        )
         .model_dump()
     )
 
@@ -448,6 +461,7 @@ def reasoning(req: ReasoningRequest):
         .complete(
             req.messages,
             thinking_budget=req.thinking_budget,
+            temperature=req.temperature,
             response_schema=req.response_schema,
         )
         .model_dump()
@@ -495,6 +509,7 @@ def image_inspector(req: ImageInspectRequest):
             req.system,
             req.prompt,
             max_retries=req.max_retries,
+            temperature=req.temperature,
             response_schema=req.response_schema,
         )
         .model_dump()

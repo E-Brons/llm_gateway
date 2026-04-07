@@ -28,12 +28,16 @@ class GeneralLLM(ABC):
         self,
         messages: list[dict],
         *,
+        temperature: float | None = None,
         response_schema: dict | None = None,
     ) -> "TextResponse":  # noqa: F821
         """Send *messages* and return a TextResponse.
 
         Parameters
         ----------
+        temperature:
+            Per-call temperature override.  Overrides the instance-level
+            ``temperature`` set at construction time.
         response_schema:
             Per-call JSON schema for structured output.  Overrides the
             instance-level ``response_schema`` set at construction time.
@@ -63,12 +67,16 @@ class TextGenLLM(ABC):
         messages: list[dict],
         *,
         max_retries: int = 3,
+        temperature: float | None = None,
         response_schema: dict | None = None,
     ) -> "TextResponse":  # noqa: F821
         """Send *messages* and return a TextResponse, retrying on empty/invalid output.
 
         Parameters
         ----------
+        temperature:
+            Per-call temperature override.  Overrides the instance-level
+            ``temperature`` set at construction time.
         response_schema:
             Per-call JSON schema for structured output.  Overrides the
             instance-level ``response_schema`` set at construction time.
@@ -98,12 +106,16 @@ class ReasoningLLM(ABC):
         messages: list[dict],
         *,
         thinking_budget: int | None = None,
+        temperature: float | None = None,
         response_schema: dict | None = None,
     ) -> "TextResponse":  # noqa: F821
         """Send *messages* with optional thinking budget and return a TextResponse.
 
         Parameters
         ----------
+        temperature:
+            Per-call temperature override.  Overrides the instance-level
+            ``temperature`` set at construction time.
         response_schema:
             Per-call JSON schema for structured output.  Overrides the
             instance-level ``response_schema`` set at construction time.
@@ -168,12 +180,16 @@ class ImageInspectorLLM(ABC):
         prompt: str,
         *,
         max_retries: int = 3,
+        temperature: float | None = None,
         response_schema: dict | None = None,
     ) -> "TextResponse":  # noqa: F821
         """Describe or analyse *image* given *system* and *prompt*.
 
         Parameters
         ----------
+        temperature:
+            Per-call temperature override.  Overrides the instance-level
+            ``temperature`` set at construction time.
         response_schema:
             Per-call JSON schema for structured output.  Overrides the
             instance-level ``response_schema`` set at construction time.

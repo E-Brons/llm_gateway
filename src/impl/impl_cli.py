@@ -72,9 +72,6 @@ def _run_claude_stream_json(
 ) -> tuple[str, float]:
     cmd = [
         _CLI_CMD,
-        "-p",
-        "",
-        "--verbose",
         "--output-format",
         "stream-json",
         "--input-format",
@@ -154,7 +151,11 @@ class CLIGeneralLLM(GeneralLLM):
         )
 
     def complete(
-        self, messages: list[dict], *, response_schema: dict | None = None
+        self,
+        messages: list[dict],
+        *,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
     ) -> TextResponse:
         effective_schema = response_schema if response_schema is not None else self.response_schema
         msgs = _inject_schema(messages, effective_schema) if effective_schema else messages
@@ -186,7 +187,12 @@ class CLITextGenLLM(TextGenLLM):
         )
 
     def complete(
-        self, messages: list[dict], *, max_retries: int = 3, response_schema: dict | None = None
+        self,
+        messages: list[dict],
+        *,
+        max_retries: int = 3,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
     ) -> TextResponse:
         effective_schema = response_schema if response_schema is not None else self.response_schema
         base_msgs = _inject_schema(messages, effective_schema) if effective_schema else messages
@@ -222,6 +228,7 @@ class CLIReasoningLLM(ReasoningLLM):
         messages: list[dict],
         *,
         thinking_budget: int | None = None,
+        temperature: float | None = None,
         response_schema: dict | None = None,
     ) -> TextResponse:
         effective_schema = response_schema if response_schema is not None else self.response_schema
@@ -234,7 +241,7 @@ class CLIImageInspectorLLM(ImageInspectorLLM):
     def __init__(
         self,
         model: str = "claude",
-        timeout: int = 90,
+        timeout: int = 300,
         temperature: float | None = None,
         max_tokens: int | None = None,
         response_schema: dict | None = None,
@@ -254,6 +261,7 @@ class CLIImageInspectorLLM(ImageInspectorLLM):
         prompt: str,
         *,
         max_retries: int = 3,
+        temperature: float | None = None,
         response_schema: dict | None = None,
     ) -> TextResponse:
         b64 = base64.b64encode(image).decode("ascii")

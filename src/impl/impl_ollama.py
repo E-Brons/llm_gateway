@@ -131,16 +131,21 @@ class OllamaGeneralLLM(GeneralLLM):
         self.ollama_url = ollama_url
 
     def complete(
-        self, messages: list[dict], *, response_schema: dict | None = None
+        self,
+        messages: list[dict],
+        *,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
     ) -> TextResponse:
         t0 = time.monotonic()
         effective_schema = response_schema if response_schema is not None else self.response_schema
+        effective_temp = temperature if temperature is not None else self.temperature
         content, used_model = _ollama_chat(
             self.ollama_url,
             self.model,
             messages,
             self.timeout,
-            temperature=self.temperature,
+            temperature=effective_temp,
             max_tokens=self.max_tokens,
             response_schema=effective_schema,
         )
@@ -172,9 +177,15 @@ class OllamaTextGenLLM(TextGenLLM):
         self.ollama_url = ollama_url
 
     def complete(
-        self, messages: list[dict], *, max_retries: int = 3, response_schema: dict | None = None
+        self,
+        messages: list[dict],
+        *,
+        max_retries: int = 3,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
     ) -> TextResponse:
         effective_schema = response_schema if response_schema is not None else self.response_schema
+        effective_temp = temperature if temperature is not None else self.temperature
 
         def call_fn(msgs: list[dict]) -> tuple[str, str]:
             return _ollama_chat(
@@ -182,7 +193,7 @@ class OllamaTextGenLLM(TextGenLLM):
                 self.model,
                 msgs,
                 self.timeout,
-                temperature=self.temperature,
+                temperature=effective_temp,
                 max_tokens=self.max_tokens,
                 response_schema=effective_schema,
             )
@@ -216,16 +227,18 @@ class OllamaReasoningLLM(ReasoningLLM):
         messages: list[dict],
         *,
         thinking_budget: int | None = None,
+        temperature: float | None = None,
         response_schema: dict | None = None,
     ) -> TextResponse:
         t0 = time.monotonic()
         effective_schema = response_schema if response_schema is not None else self.response_schema
+        effective_temp = temperature if temperature is not None else self.temperature
         content, used_model = _ollama_chat(
             self.ollama_url,
             self.model,
             messages,
             self.timeout,
-            temperature=self.temperature,
+            temperature=effective_temp,
             max_tokens=self.max_tokens,
             response_schema=effective_schema,
         )
@@ -330,10 +343,12 @@ class OllamaImageInspectorLLM(ImageInspectorLLM):
         prompt: str,
         *,
         max_retries: int = 3,
+        temperature: float | None = None,
         response_schema: dict | None = None,
     ) -> TextResponse:
         image_b64 = base64.b64encode(image).decode("ascii")
         effective_schema = response_schema if response_schema is not None else self.response_schema
+        effective_temp = temperature if temperature is not None else self.temperature
 
         def call_fn(msgs: list[dict]) -> tuple[str, str]:
             return _ollama_generate(
@@ -343,7 +358,7 @@ class OllamaImageInspectorLLM(ImageInspectorLLM):
                 self.timeout,
                 system=system,
                 images=[image_b64],
-                temperature=self.temperature,
+                temperature=effective_temp,
                 max_tokens=self.max_tokens,
                 response_schema=effective_schema,
             )

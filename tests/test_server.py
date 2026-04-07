@@ -150,7 +150,10 @@ def test_reasoning_with_thinking_budget(client):
     )
     assert resp.status_code == 200
     factory.reasoning.return_value.complete.assert_called_once_with(
-        [{"role": "user", "content": "think"}], thinking_budget=2048, response_schema=None
+        [{"role": "user", "content": "think"}],
+        thinking_budget=2048,
+        temperature=None,
+        response_schema=None,
     )
 
 
@@ -167,7 +170,7 @@ def test_general_forwards_response_schema(client):
     )
     assert resp.status_code == 200
     factory.general.return_value.complete.assert_called_once_with(
-        [{"role": "user", "content": "hi"}], response_schema=schema
+        [{"role": "user", "content": "hi"}], temperature=None, response_schema=schema
     )
 
 
@@ -181,7 +184,10 @@ def test_text_gen_forwards_response_schema(client):
     )
     assert resp.status_code == 200
     factory.text_gen.return_value.complete.assert_called_once_with(
-        [{"role": "user", "content": "compute"}], max_retries=3, response_schema=schema
+        [{"role": "user", "content": "compute"}],
+        max_retries=3,
+        temperature=None,
+        response_schema=schema,
     )
 
 
@@ -195,7 +201,10 @@ def test_reasoning_forwards_response_schema(client):
     )
     assert resp.status_code == 200
     factory.reasoning.return_value.complete.assert_called_once_with(
-        [{"role": "user", "content": "reason"}], thinking_budget=None, response_schema=schema
+        [{"role": "user", "content": "reason"}],
+        thinking_budget=None,
+        temperature=None,
+        response_schema=schema,
     )
 
 
@@ -215,7 +224,7 @@ def test_image_inspector_forwards_response_schema(client):
     )
     assert resp.status_code == 200
     factory.image_inspector.return_value.inspect.assert_called_once_with(
-        b"fake image", "analyst", "color?", max_retries=3, response_schema=schema
+        b"fake image", "analyst", "color?", max_retries=3, temperature=None, response_schema=schema
     )
 
 
@@ -226,7 +235,7 @@ def test_response_schema_optional_defaults_to_none(client):
     resp = c.post("/general", json={"messages": [{"role": "user", "content": "hi"}]})
     assert resp.status_code == 200
     factory.general.return_value.complete.assert_called_once_with(
-        [{"role": "user", "content": "hi"}], response_schema=None
+        [{"role": "user", "content": "hi"}], temperature=None, response_schema=None
     )
 
 

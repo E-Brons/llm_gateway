@@ -54,14 +54,19 @@ class LiteLLMGeneralLLM(GeneralLLM):
         reset_litellm_client()
 
     def complete(
-        self, messages: list[dict], *, response_schema: dict | None = None
+        self,
+        messages: list[dict],
+        *,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
     ) -> TextResponse:
         t0 = time.monotonic()
         kwargs: dict = {"model": self.model, "messages": messages, "timeout": self.timeout}
         if self.api_base:
             kwargs["api_base"] = self.api_base
         effective_schema = response_schema if response_schema is not None else self.response_schema
-        _apply_common(kwargs, self.temperature, self.max_tokens, effective_schema)
+        effective_temp = temperature if temperature is not None else self.temperature
+        _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema)
         response = litellm.completion(**kwargs)
         content = response.choices[0].message.content or ""
         return TextResponse(
@@ -93,15 +98,21 @@ class LiteLLMTextGenLLM(TextGenLLM):
         reset_litellm_client()
 
     def complete(
-        self, messages: list[dict], *, max_retries: int = 3, response_schema: dict | None = None
+        self,
+        messages: list[dict],
+        *,
+        max_retries: int = 3,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
     ) -> TextResponse:
         effective_schema = response_schema if response_schema is not None else self.response_schema
+        effective_temp = temperature if temperature is not None else self.temperature
 
         def call_fn(msgs: list[dict]) -> tuple[str, str]:
             kwargs: dict = {"model": self.model, "messages": msgs, "timeout": self.timeout}
             if self.api_base:
                 kwargs["api_base"] = self.api_base
-            _apply_common(kwargs, self.temperature, self.max_tokens, effective_schema)
+            _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema)
             response = litellm.completion(**kwargs)
             return response.choices[0].message.content or "", self.model
 
@@ -135,6 +146,7 @@ class LiteLLMReasoningLLM(ReasoningLLM):
         messages: list[dict],
         *,
         thinking_budget: int | None = None,
+        temperature: float | None = None,
         response_schema: dict | None = None,
     ) -> TextResponse:
         t0 = time.monotonic()
@@ -142,7 +154,8 @@ class LiteLLMReasoningLLM(ReasoningLLM):
         if self.api_base:
             kwargs["api_base"] = self.api_base
         effective_schema = response_schema if response_schema is not None else self.response_schema
-        _apply_common(kwargs, self.temperature, self.max_tokens, effective_schema)
+        effective_temp = temperature if temperature is not None else self.temperature
+        _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema)
         if thinking_budget is not None:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
         response = litellm.completion(**kwargs)
@@ -227,6 +240,7 @@ class LiteLLMImageInspectorLLM(ImageInspectorLLM):
         prompt: str,
         *,
         max_retries: int = 3,
+        temperature: float | None = None,
         response_schema: dict | None = None,
     ) -> TextResponse:
         b64 = base64.b64encode(image).decode("ascii")
@@ -241,12 +255,13 @@ class LiteLLMImageInspectorLLM(ImageInspectorLLM):
             },
         ]
         effective_schema = response_schema if response_schema is not None else self.response_schema
+        effective_temp = temperature if temperature is not None else self.temperature
 
         def call_fn(msgs: list[dict]) -> tuple[str, str]:
             kwargs: dict = {"model": self.model, "messages": msgs, "timeout": self.timeout}
             if self.api_base:
                 kwargs["api_base"] = self.api_base
-            _apply_common(kwargs, self.temperature, self.max_tokens, effective_schema)
+            _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema)
             response = litellm.completion(**kwargs)
             return response.choices[0].message.content or "", self.model
 
