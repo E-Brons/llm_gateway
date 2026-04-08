@@ -156,6 +156,7 @@ class CLIGeneralLLM(GeneralLLM):
         *,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         effective_schema = response_schema if response_schema is not None else self.response_schema
         msgs = _inject_schema(messages, effective_schema) if effective_schema else messages
@@ -193,6 +194,7 @@ class CLITextGenLLM(TextGenLLM):
         max_retries: int = 3,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         effective_schema = response_schema if response_schema is not None else self.response_schema
         base_msgs = _inject_schema(messages, effective_schema) if effective_schema else messages
@@ -230,6 +232,7 @@ class CLIReasoningLLM(ReasoningLLM):
         thinking_budget: int | None = None,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         effective_schema = response_schema if response_schema is not None else self.response_schema
         msgs = _inject_schema(messages, effective_schema) if effective_schema else messages
@@ -263,6 +266,7 @@ class CLIImageInspectorLLM(ImageInspectorLLM):
         max_retries: int = 3,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         b64 = base64.b64encode(image).decode("ascii")
         messages: list[dict] = [
