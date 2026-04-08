@@ -119,7 +119,7 @@ def _run_sanity_checks(factory: LLMFactory) -> None:
                 "ipadapter",
                 lambda: factory.ipadapter().generate(
                     "a solid red square",
-                    _minimal_png(),
+                    reference_images=[_minimal_png()],
                     width=32,
                     height=32,
                     num_inference_steps=1,
@@ -134,7 +134,7 @@ def _run_sanity_checks(factory: LLMFactory) -> None:
                 "ipadapter_faceid",
                 lambda: factory.ipadapter_faceid().generate(
                     "a portrait",
-                    _minimal_png(),
+                    reference_images=[_minimal_png()],
                     width=32,
                     height=32,
                     num_inference_steps=1,
@@ -300,11 +300,15 @@ def _f() -> LLMFactory:
 class MessageRequest(BaseModel):
     messages: list[dict[str, Any]]
     max_retries: int = 3
+    temperature: float | None = None
+    response_schema: dict[str, Any] | None = None
 
 
 class ReasoningRequest(BaseModel):
     messages: list[dict[str, Any]]
     thinking_budget: int | None = None
+    temperature: float | None = None
+    response_schema: dict[str, Any] | None = None
 
 
 class ImageGenRequest(BaseModel):
@@ -322,6 +326,8 @@ class ImageInspectRequest(BaseModel):
     system: str
     prompt: str
     max_retries: int = 3
+    temperature: float | None = None
+    response_schema: dict[str, Any] | None = None
 
 
 class ToolsRequest(BaseModel):
@@ -490,29 +496,79 @@ def list_models():
     except Exception:
         pass
 
+    diffusion_available: list[str] = []
+    if _config is not None and (
+        _config.ipadapter is not None or _config.ipadapter_faceid is not None
+    ):
+        # Try to query the diffusion server for its known models
+        diff_bases: list[str] = []
+        if _config.ipadapter is not None and _config.ipadapter.api_base:
+            diff_bases.append(_config.ipadapter.api_base)
+        if _config.ipadapter_faceid is not None and _config.ipadapter_faceid.api_base:
+            diff_bases.append(_config.ipadapter_faceid.api_base)
+        for base in dict.fromkeys(diff_bases):  # deduplicate, preserve order
+            try:
+                r = _requests.get(f"{base}/models", timeout=5)
+                if r.ok:
+                    diffusion_available += [m["name"] for m in r.json().get("models", [])]
+            except Exception:
+                pass
+
     for entry in configured:
         if entry["implementation"] == "ollama":
             bare = entry["model"].removeprefix("ollama/")
             entry["available"] = any(
                 p == bare or p.startswith(bare + ":") or p == entry["model"] for p in ollama_pulled
             )
+        elif entry["implementation"] == "diffusion_server":
+            bare = entry["model"].removeprefix("diffusion/")
+            entry["available"] = bare in diffusion_available
 
-    return {"configured": configured, "ollama_available": ollama_pulled}
+    return {
+        "configured": configured,
+        "ollama_available": ollama_pulled,
+        "diffusion_available": diffusion_available,
+    }
 
 
 @app.post("/general")
 def general(req: MessageRequest):
-    return _f().general().complete(req.messages).model_dump()
+    return (
+        _f()
+        .general()
+        .complete(req.messages, temperature=req.temperature, response_schema=req.response_schema)
+        .model_dump()
+    )
 
 
 @app.post("/text_gen")
 def text_gen(req: MessageRequest):
-    return _f().text_gen().complete(req.messages, max_retries=req.max_retries).model_dump()
+    return (
+        _f()
+        .text_gen()
+        .complete(
+            req.messages,
+            max_retries=req.max_retries,
+            temperature=req.temperature,
+            response_schema=req.response_schema,
+        )
+        .model_dump()
+    )
 
 
 @app.post("/reasoning")
 def reasoning(req: ReasoningRequest):
-    return _f().reasoning().complete(req.messages, thinking_budget=req.thinking_budget).model_dump()
+    return (
+        _f()
+        .reasoning()
+        .complete(
+            req.messages,
+            thinking_budget=req.thinking_budget,
+            temperature=req.temperature,
+            response_schema=req.response_schema,
+        )
+        .model_dump()
+    )
 
 
 @app.post("/image_gen")
@@ -551,7 +607,14 @@ def image_inspector(req: ImageInspectRequest):
     return (
         _f()
         .image_inspector()
-        .inspect(image, req.system, req.prompt, max_retries=req.max_retries)
+        .inspect(
+            image,
+            req.system,
+            req.prompt,
+            max_retries=req.max_retries,
+            temperature=req.temperature,
+            response_schema=req.response_schema,
+        )
         .model_dump()
     )
 
@@ -570,7 +633,7 @@ def ipadapter(req: IPAdapterRequest):
         .ipadapter()
         .generate(
             req.prompt,
-            reference_image,
+            reference_images=[reference_image],
             weight=req.weight,
             width=req.width,
             height=req.height,
@@ -597,7 +660,7 @@ def ipadapter_faceid(req: IPAdapterFaceIDRequest):
         .ipadapter_faceid()
         .generate(
             req.prompt,
-            face_image,
+            reference_images=[face_image],
             weight=req.weight,
             width=req.width,
             height=req.height,

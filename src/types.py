@@ -24,8 +24,25 @@ class GeneralLLM(ABC):
         self.response_schema = response_schema
 
     @abstractmethod
-    def complete(self, messages: list[dict]) -> "TextResponse":  # noqa: F821
-        """Send *messages* and return a TextResponse."""
+    def complete(
+        self,
+        messages: list[dict],
+        *,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
+        options: dict | None = None,
+    ) -> "TextResponse":  # noqa: F821
+        """Send *messages* and return a TextResponse.
+
+        Parameters
+        ----------
+        temperature:
+            Per-call temperature override.  Overrides the instance-level
+            ``temperature`` set at construction time.
+        response_schema:
+            Per-call JSON schema for structured output.  Overrides the
+            instance-level ``response_schema`` set at construction time.
+        """
 
 
 class TextGenLLM(ABC):
@@ -51,8 +68,21 @@ class TextGenLLM(ABC):
         messages: list[dict],
         *,
         max_retries: int = 3,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> "TextResponse":  # noqa: F821
-        """Send *messages* and return a TextResponse, retrying on empty/invalid output."""
+        """Send *messages* and return a TextResponse, retrying on empty/invalid output.
+
+        Parameters
+        ----------
+        temperature:
+            Per-call temperature override.  Overrides the instance-level
+            ``temperature`` set at construction time.
+        response_schema:
+            Per-call JSON schema for structured output.  Overrides the
+            instance-level ``response_schema`` set at construction time.
+        """
 
 
 class ReasoningLLM(ABC):
@@ -78,8 +108,21 @@ class ReasoningLLM(ABC):
         messages: list[dict],
         *,
         thinking_budget: int | None = None,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> "TextResponse":  # noqa: F821
-        """Send *messages* with optional thinking budget and return a TextResponse."""
+        """Send *messages* with optional thinking budget and return a TextResponse.
+
+        Parameters
+        ----------
+        temperature:
+            Per-call temperature override.  Overrides the instance-level
+            ``temperature`` set at construction time.
+        response_schema:
+            Per-call JSON schema for structured output.  Overrides the
+            instance-level ``response_schema`` set at construction time.
+        """
 
 
 class ImageGenLLM(ABC):
@@ -107,12 +150,21 @@ class ImageGenLLM(ABC):
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
         reference_images: list[bytes] | None = None,
+        weight: float | None = None,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
         num_inference_steps: int | None = None,
+        options: dict | None = None,
     ) -> "ImageResponse":  # noqa: F821
-        """Generate an image from *prompt* and return an ImageResponse."""
+        """Generate an image from *prompt* and return an ImageResponse.
+
+        Parameters
+        ----------
+        weight:
+            Conditioning strength for reference-image-guided generation
+            (e.g. IP-Adapter).  Ignored by backends that do not support it.
+        """
 
 
 class ImageInspectorLLM(ABC):
@@ -140,8 +192,21 @@ class ImageInspectorLLM(ABC):
         prompt: str,
         *,
         max_retries: int = 3,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> "TextResponse":  # noqa: F821
-        """Describe or analyse *image* given *system* and *prompt*."""
+        """Describe or analyse *image* given *system* and *prompt*.
+
+        Parameters
+        ----------
+        temperature:
+            Per-call temperature override.  Overrides the instance-level
+            ``temperature`` set at construction time.
+        response_schema:
+            Per-call JSON schema for structured output.  Overrides the
+            instance-level ``response_schema`` set at construction time.
+        """
 
 
 class ToolsLLM(ABC):
@@ -168,76 +233,9 @@ class ToolsLLM(ABC):
         tools: list[dict],
         *,
         max_retries: int = 3,
+        options: dict | None = None,
     ) -> "ToolCallResponse":  # noqa: F821
         """Send *messages* with *tools* definitions and return a ToolCallResponse."""
-
-
-class IPAdapterLLM(ABC):
-    """Image generation conditioned on a reference image via IP-Adapter."""
-
-    def __init__(
-        self,
-        model: str,
-        timeout: int = 300,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-        response_schema: dict | None = None,
-    ) -> None:
-        self.model = model
-        self.timeout = timeout
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.response_schema = response_schema
-
-    @abstractmethod
-    def generate(
-        self,
-        prompt: str,
-        reference_image: bytes,
-        *,
-        max_retries: int = 3,
-        validator: Callable[[bytes], bool] | None = None,
-        weight: float = 0.5,
-        width: int = 256,
-        height: int = 256,
-        seed: int | None = None,
-        num_inference_steps: int | None = None,
-    ) -> "ImageResponse":  # noqa: F821
-        """Generate an image conditioned on *reference_image* and return an ImageResponse."""
-
-
-class IPAdapterFaceIDLLM(ABC):
-    """Image generation conditioned on a face image via IP-Adapter FaceID."""
-
-    def __init__(
-        self,
-        model: str,
-        timeout: int = 300,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-        response_schema: dict | None = None,
-    ) -> None:
-        self.model = model
-        self.timeout = timeout
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.response_schema = response_schema
-
-    @abstractmethod
-    def generate(
-        self,
-        prompt: str,
-        face_image: bytes,
-        *,
-        max_retries: int = 3,
-        validator: Callable[[bytes], bool] | None = None,
-        weight: float = 0.5,
-        width: int = 256,
-        height: int = 256,
-        seed: int | None = None,
-        num_inference_steps: int | None = None,
-    ) -> "ImageResponse":  # noqa: F821
-        """Generate an image conditioned on *face_image* and return an ImageResponse."""
 
 
 # Avoid circular import — import response types only for type annotations
