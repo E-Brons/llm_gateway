@@ -1,7 +1,7 @@
 """Diffusion-server REST implementations for IP-Adapter and IP-Adapter FaceID.
 
-Both classes POST to a lightweight HTTP server that wraps a local diffusion
-pipeline.  The server is expected to expose two endpoints:
+Both classes implement ImageGenLLM and POST to a lightweight HTTP server that
+wraps a local diffusion pipeline.  The server is expected to expose two endpoints:
 
   POST {api_base}/ipadapter
     Request  : {"model", "prompt", "reference_image" (b64), "width", "height",
@@ -13,7 +13,8 @@ pipeline.  The server is expected to expose two endpoints:
                 "steps", "weight", "seed"}
     Response : {"image" (b64), "model"}
 
-Both endpoints return the generated image as a base-64-encoded PNG.
+Pass the reference/face image via ``reference_images=[img_bytes]``.
+Pass the adapter conditioning strength via the ``weight`` parameter (default 0.5).
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ import requests
 
 from .._retry import retry_image_generation
 from ..responses import ImageResponse
-from ..types import IPAdapterFaceIDLLM, IPAdapterLLM
+from ..types import ImageGenLLM
 
 _DEFAULT_API_BASE = "http://localhost:7860"
 
@@ -37,7 +38,7 @@ def _bare_model(model: str) -> str:
     return model
 
 
-class DiffusionServerIPAdapterLLM(IPAdapterLLM):
+class DiffusionServerIPAdapterLLM(ImageGenLLM):
     """IP-Adapter image generation via a local diffusion REST server."""
 
     def __init__(
@@ -61,17 +62,20 @@ class DiffusionServerIPAdapterLLM(IPAdapterLLM):
     def generate(
         self,
         prompt: str,
-        reference_image: bytes,
         *,
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
-        weight: float = 0.5,
+        reference_images: list[bytes] | None = None,
+        weight: float | None = None,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
         num_inference_steps: int | None = None,
+        options: dict | None = None,
     ) -> ImageResponse:
+        reference_image = (reference_images or [b""])[0]
         ref_b64 = base64.b64encode(reference_image).decode("ascii")
+        effective_weight = weight if weight is not None else 0.5
 
         def call_fn() -> tuple[bytes, str]:
             payload: dict = {
@@ -80,7 +84,7 @@ class DiffusionServerIPAdapterLLM(IPAdapterLLM):
                 "reference_image": ref_b64,
                 "width": width,
                 "height": height,
-                "weight": weight,
+                "weight": effective_weight,
             }
             if seed is not None:
                 payload["seed"] = seed
@@ -98,7 +102,7 @@ class DiffusionServerIPAdapterLLM(IPAdapterLLM):
         return retry_image_generation(call_fn, max_retries, self.model, validator=validator)
 
 
-class DiffusionServerIPAdapterFaceIDLLM(IPAdapterFaceIDLLM):
+class DiffusionServerIPAdapterFaceIDLLM(ImageGenLLM):
     """IP-Adapter FaceID image generation via a local diffusion REST server."""
 
     def __init__(
@@ -122,17 +126,20 @@ class DiffusionServerIPAdapterFaceIDLLM(IPAdapterFaceIDLLM):
     def generate(
         self,
         prompt: str,
-        face_image: bytes,
         *,
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
-        weight: float = 0.5,
+        reference_images: list[bytes] | None = None,
+        weight: float | None = None,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
         num_inference_steps: int | None = None,
+        options: dict | None = None,
     ) -> ImageResponse:
+        face_image = (reference_images or [b""])[0]
         face_b64 = base64.b64encode(face_image).decode("ascii")
+        effective_weight = weight if weight is not None else 0.5
 
         def call_fn() -> tuple[bytes, str]:
             payload: dict = {
@@ -141,7 +148,7 @@ class DiffusionServerIPAdapterFaceIDLLM(IPAdapterFaceIDLLM):
                 "face_image": face_b64,
                 "width": width,
                 "height": height,
-                "weight": weight,
+                "weight": effective_weight,
             }
             if seed is not None:
                 payload["seed"] = seed
