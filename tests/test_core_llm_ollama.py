@@ -295,6 +295,101 @@ def test_ollama_tools_generates_id_when_missing():
 
 
 # ---------------------------------------------------------------------------
+# options parameter forwarding
+# ---------------------------------------------------------------------------
+
+
+def test_ollama_general_options_merged_into_payload():
+    from src.impl.impl_ollama import OllamaGeneralLLM
+
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response("ok")
+    ) as mock_post:
+        llm = OllamaGeneralLLM(model="phi3", ollama_url=_OLLAMA_URL)
+        llm.complete([{"role": "user", "content": "x"}], options={"num_ctx": 4096})
+
+    assert mock_post.call_args[1]["json"]["options"]["num_ctx"] == 4096
+
+
+def test_ollama_text_gen_options_merged_into_payload():
+    from src.impl.impl_ollama import OllamaTextGenLLM
+
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response("ok")
+    ) as mock_post:
+        llm = OllamaTextGenLLM(model="phi3", ollama_url=_OLLAMA_URL)
+        llm.complete([{"role": "user", "content": "x"}], options={"num_ctx": 2048})
+
+    assert mock_post.call_args[1]["json"]["options"]["num_ctx"] == 2048
+
+
+def test_ollama_reasoning_options_merged_into_payload():
+    from src.impl.impl_ollama import OllamaReasoningLLM
+
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response("ok")
+    ) as mock_post:
+        llm = OllamaReasoningLLM(model="phi3", ollama_url=_OLLAMA_URL)
+        llm.complete([{"role": "user", "content": "x"}], options={"top_k": 10})
+
+    assert mock_post.call_args[1]["json"]["options"]["top_k"] == 10
+
+
+def test_ollama_image_gen_options_merged_into_payload():
+    from src.impl.impl_ollama import OllamaImageGenLLM
+
+    b64 = base64.b64encode(b"img").decode()
+
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_image_gen_response(b64)
+    ) as mock_post:
+        llm = OllamaImageGenLLM(model="flux", ollama_url=_OLLAMA_URL)
+        llm.generate("x", max_retries=1, options={"num_ctx": 512})
+
+    assert mock_post.call_args[1]["json"]["options"]["num_ctx"] == 512
+
+
+def test_ollama_image_inspector_options_merged_into_payload():
+    from src.impl.impl_ollama import OllamaImageInspectorLLM
+
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_generate_response("desc")
+    ) as mock_post:
+        llm = OllamaImageInspectorLLM(model="llava", ollama_url=_OLLAMA_URL)
+        llm.inspect(b"img", "sys", "describe", options={"num_ctx": 1024})
+
+    assert mock_post.call_args[1]["json"]["options"]["num_ctx"] == 1024
+
+
+def test_ollama_tools_options_merged_into_payload():
+    from src.impl.impl_ollama import OllamaToolsLLM
+
+    tool_calls_data = [{"function": {"name": "get_weather", "arguments": {"city": "Oslo"}}}]
+    mock_resp = _mock_chat_response("", tool_calls=tool_calls_data)
+
+    with patch("src.impl.impl_ollama.requests.post", return_value=mock_resp) as mock_post:
+        llm = OllamaToolsLLM(model="phi3", ollama_url=_OLLAMA_URL)
+        llm.complete([{"role": "user", "content": "x"}], _SAMPLE_TOOLS, options={"num_ctx": 256})
+
+    assert mock_post.call_args[1]["json"]["options"]["num_ctx"] == 256
+
+
+def test_ollama_options_coexist_with_temperature():
+    """options dict is merged with temperature/max_tokens, not replacing them."""
+    from src.impl.impl_ollama import OllamaGeneralLLM
+
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response("ok")
+    ) as mock_post:
+        llm = OllamaGeneralLLM(model="phi3", ollama_url=_OLLAMA_URL, temperature=0.5)
+        llm.complete([{"role": "user", "content": "x"}], options={"num_ctx": 4096})
+
+    opts = mock_post.call_args[1]["json"]["options"]
+    assert opts["temperature"] == 0.5
+    assert opts["num_ctx"] == 4096
+
+
+# ---------------------------------------------------------------------------
 # OllamaImageGenLLM — integration tests (require live Ollama)
 # ---------------------------------------------------------------------------
 

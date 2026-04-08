@@ -298,3 +298,88 @@ def test_litellm_tools_no_tool_calls_returns_empty_list():
 
     assert result.tool_calls == []
     assert result.content == "I don't need a tool for that."
+
+
+# ---------------------------------------------------------------------------
+# options parameter forwarding
+# ---------------------------------------------------------------------------
+
+
+def test_litellm_general_options_forwarded_as_extra_body():
+    from src.impl.impl_litellm import LiteLLMGeneralLLM
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("ok")
+        ) as mock_c:
+            llm = LiteLLMGeneralLLM(model="gpt-4o")
+            llm.complete([{"role": "user", "content": "x"}], options={"num_ctx": 4096})
+
+    assert mock_c.call_args[1]["extra_body"] == {"options": {"num_ctx": 4096}}
+
+
+def test_litellm_text_gen_options_forwarded_as_extra_body():
+    from src.impl.impl_litellm import LiteLLMTextGenLLM
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("ok")
+        ) as mock_c:
+            llm = LiteLLMTextGenLLM(model="gpt-4o")
+            llm.complete([{"role": "user", "content": "x"}], options={"num_ctx": 2048})
+
+    assert mock_c.call_args[1]["extra_body"] == {"options": {"num_ctx": 2048}}
+
+
+def test_litellm_reasoning_options_forwarded_as_extra_body():
+    from src.impl.impl_litellm import LiteLLMReasoningLLM
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("ok")
+        ) as mock_c:
+            llm = LiteLLMReasoningLLM(model="claude-opus-4-6")
+            llm.complete([{"role": "user", "content": "x"}], options={"top_k": 10})
+
+    assert mock_c.call_args[1]["extra_body"] == {"options": {"top_k": 10}}
+
+
+def test_litellm_image_inspector_options_forwarded_as_extra_body():
+    from src.impl.impl_litellm import LiteLLMImageInspectorLLM
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("desc")
+        ) as mock_c:
+            llm = LiteLLMImageInspectorLLM(model="gpt-4o")
+            llm.inspect(b"img", "sys", "describe", options={"temperature": 0.1})
+
+    assert mock_c.call_args[1]["extra_body"] == {"options": {"temperature": 0.1}}
+
+
+def test_litellm_tools_options_forwarded_as_extra_body():
+    from src.impl.impl_litellm import LiteLLMToolsLLM
+
+    mock_resp = _mock_completion("ok")
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch("src.impl.impl_litellm.litellm.completion", return_value=mock_resp) as mock_c:
+            llm = LiteLLMToolsLLM(model="gpt-4o")
+            llm.complete(
+                [{"role": "user", "content": "x"}], _SAMPLE_TOOLS, options={"num_ctx": 512}
+            )
+
+    assert mock_c.call_args[1]["extra_body"] == {"options": {"num_ctx": 512}}
+
+
+def test_litellm_no_extra_body_when_options_none():
+    from src.impl.impl_litellm import LiteLLMGeneralLLM
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion", return_value=_mock_completion("ok")
+        ) as mock_c:
+            llm = LiteLLMGeneralLLM(model="gpt-4o")
+            llm.complete([{"role": "user", "content": "x"}])
+
+    assert "extra_body" not in mock_c.call_args[1]
