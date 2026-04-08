@@ -12,6 +12,10 @@ from .impl.impl_cli import (
     CLIReasoningLLM,
     CLITextGenLLM,
 )
+from .impl.impl_ipadapter import (
+    DiffusionServerIPAdapterFaceIDLLM,
+    DiffusionServerIPAdapterLLM,
+)
 from .impl.impl_litellm import (
     LiteLLMGeneralLLM,
     LiteLLMImageGenLLM,
@@ -28,7 +32,14 @@ from .impl.impl_ollama import (
     OllamaTextGenLLM,
     OllamaToolsLLM,
 )
-from .types import GeneralLLM, ImageGenLLM, ImageInspectorLLM, ReasoningLLM, TextGenLLM, ToolsLLM
+from .types import (
+    GeneralLLM,
+    ImageGenLLM,
+    ImageInspectorLLM,
+    ReasoningLLM,
+    TextGenLLM,
+    ToolsLLM,
+)
 
 _REGISTRY: dict[tuple[str, str], type] = {
     ("general", "ollama"): OllamaGeneralLLM,
@@ -49,6 +60,8 @@ _REGISTRY: dict[tuple[str, str], type] = {
     ("tools", "ollama"): OllamaToolsLLM,
     ("tools", "litellm"): LiteLLMToolsLLM,
     # CLI does not support tool use
+    ("ipadapter", "diffusion_server"): DiffusionServerIPAdapterLLM,
+    ("ipadapter_faceid", "diffusion_server"): DiffusionServerIPAdapterFaceIDLLM,
 }
 
 
@@ -73,7 +86,7 @@ def _build(type_name: str, cfg: LLMTypeConfig) -> Any:
         kwargs["response_schema"] = cfg.response_schema
     if cfg.implementation == "ollama" and cfg.ollama_url:
         kwargs["ollama_url"] = cfg.ollama_url
-    if cfg.implementation == "litellm" and cfg.api_base:
+    if cfg.implementation in ("litellm", "diffusion_server") and cfg.api_base:
         kwargs["api_base"] = cfg.api_base
 
     return cls(**kwargs)
@@ -102,6 +115,21 @@ class LLMFactory:
 
     def tools(self) -> ToolsLLM:
         return _build("tools", self._config.tools)
+
+    def ipadapter(self) -> ImageGenLLM:
+        if self._config.ipadapter is None:
+            raise ValueError(
+                "ipadapter is not configured. Add an 'ipadapter' section to llm_route.yml."
+            )
+        return _build("ipadapter", self._config.ipadapter)
+
+    def ipadapter_faceid(self) -> ImageGenLLM:
+        if self._config.ipadapter_faceid is None:
+            raise ValueError(
+                "ipadapter_faceid is not configured. "
+                "Add an 'ipadapter_faceid' section to llm_route.yml."
+            )
+        return _build("ipadapter_faceid", self._config.ipadapter_faceid)
 
 
 def create_factory(config_path: str | Path) -> LLMFactory:

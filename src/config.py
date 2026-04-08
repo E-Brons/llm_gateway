@@ -33,6 +33,8 @@ class LLMConfig(BaseModel):
     image_gen: LLMTypeConfig
     image_inspector: LLMTypeConfig
     tools: LLMTypeConfig
+    ipadapter: LLMTypeConfig | None = None
+    ipadapter_faceid: LLMTypeConfig | None = None
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

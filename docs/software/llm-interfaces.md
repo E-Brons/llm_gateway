@@ -1,15 +1,15 @@
 # LLM Interfaces — Abstraction Design
 
 **Project**: llm_gateway — standalone LLM routing library and local HTTP gateway
-**Date**: 2026-04-02
-**Version**: 0.1.0
+**Date**: 2026-04-08
+**Version**: 0.2.0
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [The 6 Interface Types](#2-the-6-interface-types)
+2. [The 8 Interface Routes](#2-the-8-interface-routes)
 3. [The Two Levels of Abstraction](#3-the-two-levels-of-abstraction)
 4. [Interface Type Contracts](#4-interface-type-contracts)
 5. [Built-in Validation and Retry](#5-built-in-validation-and-retry)
@@ -33,20 +33,24 @@ the **call mechanism (Level 1)** and the **provider specifics (Level 2)**.
 
 ---
 
-## 2. The 6 Interface Types
+## 2. The 8 Interface Routes
 
-| # | Type | Task character |
-|---|------|----------------|
-| 1 | **General** | Open-ended text — chat, summarisation, free-form responses |
-| 2 | **Text-gen** | Structured text generation — output must match a schema (YAML, JSON, template) |
-| 3 | **Reasoning** | Multi-step analytical thinking — chains of logic, comparison, decision-making |
-| 4 | **Image-gen** | Prompt → PNG — diffusion/generative image models |
-| 5 | **Image Inspector** | PNG → text — vision models that analyse, classify, or describe an image |
-| 6 | **Tools** | Function / tool calling — model returns structured tool invocations |
+| # | Route | Abstract type | Task character |
+|---|-------|--------------|----------------|
+| 1 | **general** | `GeneralLLM` | Open-ended text — chat, summarisation, free-form responses |
+| 2 | **text_gen** | `TextGenLLM` | Structured text generation — output must match a schema (YAML, JSON, template) |
+| 3 | **reasoning** | `ReasoningLLM` | Multi-step analytical thinking — chains of logic, comparison, decision-making |
+| 4 | **image_gen** | `ImageGenLLM` | Prompt → PNG — diffusion/generative image models |
+| 5 | **image_inspector** | `ImageInspectorLLM` | PNG → text — vision models that analyse, classify, or describe an image |
+| 6 | **tools** | `ToolsLLM` | Function / tool calling — model returns structured tool invocations |
+| 7 | **ipadapter** | `ImageGenLLM` | Reference-image-conditioned generation — IP-Adapter style transfer |
+| 8 | **ipadapter_faceid** | `ImageGenLLM` | Face-conditioned generation — IP-Adapter FaceID portrait synthesis |
 
-### Why keep overlapping types separate?
+Routes 7 and 8 share the `ImageGenLLM` abstract type and `ImageResponse` output.  They differ only in their `implementation` (`diffusion_server`) and the diffusion endpoint they target (`/ipadapter` vs `/ipadapter_faceid`).  Application code that calls `factory.ipadapter()` or `factory.ipadapter_faceid()` receives a plain `ImageGenLLM` — no special types required.
 
-Types 1, 2, 3, and 6 all operate on messages but differ in:
+### Why keep overlapping routes separate?
+
+Routes 1, 2, 3, and 6 all operate on messages but differ in:
 
 | Dimension | General | Text-gen | Reasoning | Tools |
 |-----------|---------|----------|-----------|-------|
@@ -71,14 +75,16 @@ graph TB
 
     AppCode["Application Code"]:::appLayer
 
-    subgraph Ifaces["LLM Interface Types"]
+    subgraph Ifaces["LLM Interface Routes"]
         direction LR
-        I1["General"]:::ifaceLayer
-        I2["TextGen"]:::ifaceLayer
-        I3["Reasoning"]:::ifaceLayer
-        I4["ImageGen"]:::ifaceLayer
-        I5["ImageInspector"]:::ifaceLayer
-        I6["Tools"]:::ifaceLayer
+        I1["general · GeneralLLM"]:::ifaceLayer
+        I2["text_gen · TextGenLLM"]:::ifaceLayer
+        I3["reasoning · ReasoningLLM"]:::ifaceLayer
+        I4["image_gen · ImageGenLLM"]:::ifaceLayer
+        I5["image_inspector · ImageInspectorLLM"]:::ifaceLayer
+        I6["tools · ToolsLLM"]:::ifaceLayer
+        I7["ipadapter · ImageGenLLM"]:::ifaceLayer
+        I8["ipadapter_faceid · ImageGenLLM"]:::ifaceLayer
     end
 
     subgraph Mechs["Level 1 — Call Mechanism"]
@@ -93,11 +99,13 @@ graph TB
         P1["Local Host · No Auth · Ollama"]:::localProv
         P2["Remote · API Key · Gemini / OpenAI / Anthropic"]:::remoteProv
         P3["CLI Tool · Embedded Auth · Claude Code"]:::cliProv
+        P4["Local Host · No Auth · Diffusion Server"]:::localProv
     end
 
     AppCode --> Ifaces
     I1 & I2 & I3 & I4 & I5 & I6 --> Mechs
-    M1 .-> P1 & P2
+    I7 & I8 --> M1
+    M1 .-> P1 & P2 & P4
     M2 .-> P1 & P2
     M3 .-> P3
 ```
@@ -201,6 +209,7 @@ ToolCall         { id: str, name: str, arguments: dict }
 |-------|------|---------|-------------|
 | `prompt` | `str` | — | Full text prompt |
 | `reference_images` | `list[bytes] \| None` | `None` | Reference PNGs passed to the model |
+| `weight` | `float \| None` | `None` | Conditioning strength for reference-image-guided generation (e.g. IP-Adapter). Ignored by backends that do not use it. |
 | `width` | `int` | `128` | Output width in pixels |
 | `height` | `int` | `128` | Output height in pixels |
 | `seed` | `int \| None` | `None` | Reproducibility seed |
@@ -264,6 +273,86 @@ ToolCall         { id: str, name: str, arguments: dict }
 
 ---
 
+### 4.7 IP-Adapter (ipadapter)
+
+**Purpose**: Generate an image conditioned on a reference style image. The reference image guides the output appearance (style, composition, colour palette) while the text prompt steers the content.
+
+**Factory method**: `factory.ipadapter()` → `ImageGenLLM`
+
+**Implementation**: `diffusion_server` — POSTs to `{api_base}/ipadapter`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `prompt` | `str` | — | Text prompt describing the desired output |
+| `reference_images` | `list[bytes]` | — | `reference_images[0]` is the style reference PNG (required) |
+| `weight` | `float \| None` | `0.5` | Adapter conditioning strength — higher = closer to reference style |
+| `width` | `int` | `256` | Output width in pixels |
+| `height` | `int` | `256` | Output height in pixels |
+| `seed` | `int \| None` | `None` | Reproducibility seed |
+| `num_inference_steps` | `int \| None` | `None` | Diffusion steps; passed as `"steps"` to the server |
+| `max_retries` | `int` | `3` | Retries on empty response or failed `validator` |
+| `validator` | `Callable[[bytes], bool] \| None` | `None` | Quality gate — `False` triggers retry |
+| `timeout` | `int` | `300 s` | |
+
+**Output**: `ImageResponse`
+
+**Diffusion server request payload**:
+```json
+{
+  "model": "<bare model name>",
+  "prompt": "...",
+  "reference_image": "<base64 PNG>",
+  "width": 256,
+  "height": 256,
+  "weight": 0.5,
+  "seed": 42,
+  "steps": 20
+}
+```
+
+---
+
+### 4.8 IP-Adapter FaceID (ipadapter_faceid)
+
+**Purpose**: Generate a portrait conditioned on a face image. The face image provides identity features (facial structure, likeness) while the text prompt controls scene, style, and context.
+
+**Factory method**: `factory.ipadapter_faceid()` → `ImageGenLLM`
+
+**Implementation**: `diffusion_server` — POSTs to `{api_base}/ipadapter_faceid`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `prompt` | `str` | — | Text prompt (scene, style, lighting, etc.) |
+| `reference_images` | `list[bytes]` | — | `reference_images[0]` is the face PNG (required) |
+| `weight` | `float \| None` | `0.5` | Face conditioning strength — higher = stronger identity retention |
+| `width` | `int` | `256` | Output width in pixels |
+| `height` | `int` | `256` | Output height in pixels |
+| `seed` | `int \| None` | `None` | Reproducibility seed |
+| `num_inference_steps` | `int \| None` | `None` | Diffusion steps; passed as `"steps"` to the server |
+| `max_retries` | `int` | `3` | Retries on empty response or failed `validator` |
+| `validator` | `Callable[[bytes], bool] \| None` | `None` | Quality gate — `False` triggers retry |
+| `timeout` | `int` | `300 s` | |
+
+**Output**: `ImageResponse`
+
+**Diffusion server request payload**:
+```json
+{
+  "model": "<bare model name>",
+  "prompt": "...",
+  "face_image": "<base64 PNG>",
+  "width": 256,
+  "height": 256,
+  "weight": 0.5,
+  "seed": 42,
+  "steps": 20
+}
+```
+
+**Note**: Both ipadapter routes use `model` prefixes `ollama/` and `diffusion/` stripped automatically before the payload is sent to the diffusion server.
+
+---
+
 ## 5. Built-in Validation and Retry
 
 | Type | Validation | Retry trigger |
@@ -285,21 +374,25 @@ ToolCall         { id: str, name: str, arguments: dict }
 
 Legend: ✅ supported · ⚠️ limited · 💰 cost driver · ❌ not supported
 
-| Type | Local (Ollama) | API-Key (LiteLLM) | CLI (claude) |
-|------|:--------------:|:-----------------:|:------------:|
-| **General** | ✅ | ✅ | ✅ |
-| **Text-gen** | ✅ | ✅ | ✅ |
-| **Reasoning** | ⚠️ local models lack true reasoning | 💰 ✅ extended thinking via Anthropic | ✅ `--effort high` |
-| **Image-gen** | ⚠️ slow, resource-heavy | ✅ (e.g. DALL-E 3) | ❌ |
-| **Image Inspector** | ✅ vision models (llava, qwen2.5vl) | ✅ multimodal | ✅ base64 in stream-json |
-| **Tools** | ✅ (tool-use capable models) | ✅ | ❌ |
+| Route | Local (Ollama) | API-Key (LiteLLM) | CLI (claude) | Diffusion Server |
+|-------|:--------------:|:-----------------:|:------------:|:----------------:|
+| **general** | ✅ | ✅ | ✅ | ❌ |
+| **text_gen** | ✅ | ✅ | ✅ | ❌ |
+| **reasoning** | ⚠️ local models lack true reasoning | 💰 ✅ extended thinking via Anthropic | ✅ `--effort high` | ❌ |
+| **image_gen** | ⚠️ slow, resource-heavy | ✅ (e.g. DALL-E 3) | ❌ | ❌ |
+| **image_inspector** | ✅ vision models (llava, qwen2.5vl) | ✅ multimodal | ✅ base64 in stream-json | ❌ |
+| **tools** | ✅ (tool-use capable models) | ✅ | ❌ | ❌ |
+| **ipadapter** | ❌ | ❌ | ❌ | ✅ `/ipadapter` endpoint |
+| **ipadapter_faceid** | ❌ | ❌ | ❌ | ✅ `/ipadapter_faceid` endpoint |
 
 **Key constraints**:
 
 - **Reasoning / Local**: use API-Key (claude-opus-4-6 extended thinking) for production; local Ollama models are acceptable for dev/low-stakes only.
 - **Image-gen / Local**: local diffusion (FLUX via Ollama) is slow (30–120 s/image) and GPU-hungry.
 - **Tools / CLI**: the `claude` subprocess interface has no tool-call protocol — not supported.
+- **ipadapter / ipadapter_faceid**: only the `diffusion_server` implementation is registered. The diffusion server must be started separately (e.g. a FastAPI wrapper around a local Stable Diffusion pipeline).
 - `thinking_budget` is only honoured by Anthropic API (LiteLLM → claude-opus-4-6) and some Ollama thinking models; all other implementations silently ignore it.
+- `weight` is only consumed by `DiffusionServerIPAdapterLLM` and `DiffusionServerIPAdapterFaceIDLLM`; other `ImageGenLLM` implementations accept the parameter and silently ignore it.
 
 ---
 
@@ -347,6 +440,22 @@ Legend: ✅ supported · ⚠️ limited · 💰 cost driver · ❌ not supported
 | Not supported | Image generation, tool use |
 | Auth | `~/.claude/` — no API key in code |
 
+### 7.4 Diffusion Server (diffusion_server)
+
+**Call mechanism**: HTTP `POST` via `requests` to a locally-running diffusion pipeline server.
+
+This backend is exclusively used for the `ipadapter` and `ipadapter_faceid` routes.  The diffusion server is a separate Python process (e.g. a FastAPI wrapper around a Stable Diffusion pipeline with the IP-Adapter LoRA weights loaded) that exposes two endpoints.
+
+| Concern | Detail |
+|---------|--------|
+| IP-Adapter endpoint | `POST {api_base}/ipadapter` — `{"model", "prompt", "reference_image" (b64), "width", "height", "weight", "seed"?, "steps"?}` |
+| FaceID endpoint | `POST {api_base}/ipadapter_faceid` — same shape but `"face_image"` instead of `"reference_image"` |
+| Response | `{"image": "<base64 PNG>", "model": "<model name>"}` |
+| Model string | `ollama/` and `diffusion/` prefixes stripped before the payload is sent |
+| Default `api_base` | `http://localhost:7860` |
+| Timeout | `300 s` (same as other image backends) |
+| Configuration | `api_base` in `llm_route.yml`; model names reference the weights loaded on the server |
+
 ---
 
 ## 8. Architecture Call-Flow Diagram
@@ -357,17 +466,20 @@ graph TD
     classDef ollamaImpl fill:#27AE60,color:#fff,stroke:#1E8C4E
     classDef litellmImpl fill:#2980B9,color:#fff,stroke:#1A6A9A
     classDef cliImpl    fill:#E67E22,color:#fff,stroke:#C46A1A
+    classDef diffImpl   fill:#C0392B,color:#fff,stroke:#922B21
     classDef caller     fill:#F5F0E8,color:#333,stroke:#999
 
     App["Application Code / HTTP Client"]:::caller
 
-    subgraph TypeInterfaces["Interface Types (6)"]
-        GEN["GeneralLLM · complete(messages) → TextResponse"]:::typeIface
-        TG["TextGenLLM · complete(messages, max_retries) → TextResponse"]:::typeIface
-        RSN["ReasoningLLM · complete(messages, thinking_budget?) → TextResponse"]:::typeIface
-        IG["ImageGenLLM · generate(prompt, ...) → ImageResponse"]:::typeIface
-        II["ImageInspectorLLM · inspect(image, system, prompt) → TextResponse"]:::typeIface
-        TL["ToolsLLM · complete(messages, tools) → ToolCallResponse"]:::typeIface
+    subgraph TypeInterfaces["Interface Routes"]
+        GEN["general · GeneralLLM · complete(messages) → TextResponse"]:::typeIface
+        TG["text_gen · TextGenLLM · complete(messages, max_retries) → TextResponse"]:::typeIface
+        RSN["reasoning · ReasoningLLM · complete(messages, thinking_budget?) → TextResponse"]:::typeIface
+        IG["image_gen · ImageGenLLM · generate(prompt, ...) → ImageResponse"]:::typeIface
+        II["image_inspector · ImageInspectorLLM · inspect(image, system, prompt) → TextResponse"]:::typeIface
+        TL["tools · ToolsLLM · complete(messages, tools) → ToolCallResponse"]:::typeIface
+        IPA["ipadapter · ImageGenLLM · generate(prompt, reference_images, weight) → ImageResponse"]:::typeIface
+        IPAF["ipadapter_faceid · ImageGenLLM · generate(prompt, reference_images, weight) → ImageResponse"]:::typeIface
     end
 
     subgraph OllamaImpls["Local — Ollama (REST)"]
@@ -395,7 +507,12 @@ graph TD
         CII["CLIImageInspectorLLM · base64 in stream-json"]:::cliImpl
     end
 
-    App --> GEN & TG & RSN & IG & II & TL
+    subgraph DiffImpls["Diffusion Server (REST)"]
+        DIPA["DiffusionServerIPAdapterLLM · POST /ipadapter"]:::diffImpl
+        DIPAF["DiffusionServerIPAdapterFaceIDLLM · POST /ipadapter_faceid"]:::diffImpl
+    end
+
+    App --> GEN & TG & RSN & IG & II & TL & IPA & IPAF
 
     GEN --> OG & LG & CG
     TG  --> OT & LT & CT
@@ -403,6 +520,8 @@ graph TD
     IG  --> OI & LI
     II  --> OII & LII & CII
     TL  --> OTL & LTL
+    IPA --> DIPA
+    IPAF --> DIPAF
 
     IG -.->|validator callback| II
 ```
@@ -445,6 +564,16 @@ image_inspector:
 tools:
   implementation: litellm
   model: gpt-4o
+
+ipadapter:
+  implementation: diffusion_server
+  model: ip-adapter_sd15_light_v11
+  api_base: http://localhost:7860
+
+ipadapter_faceid:
+  implementation: diffusion_server
+  model: ip-adapter-faceid-plus_sd15
+  api_base: http://localhost:7860
 ```
 
 The factory reads this once at startup and injects the concrete implementation wherever the abstract type is required.
