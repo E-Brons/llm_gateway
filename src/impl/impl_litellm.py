@@ -23,7 +23,11 @@ from ..types import (
 
 
 def _apply_common(
-    kwargs: dict, temperature: float | None, max_tokens: int | None, response_schema: dict | None
+    kwargs: dict,
+    temperature: float | None,
+    max_tokens: int | None,
+    response_schema: dict | None,
+    options: dict | None = None,
 ) -> None:
     if temperature is not None:
         kwargs["temperature"] = temperature
@@ -31,6 +35,8 @@ def _apply_common(
         kwargs["max_tokens"] = max_tokens
     if response_schema is not None:
         kwargs["response_format"] = response_schema
+    if options:
+        kwargs["extra_body"] = {"options": options}
 
 
 class LiteLLMGeneralLLM(GeneralLLM):
@@ -59,6 +65,7 @@ class LiteLLMGeneralLLM(GeneralLLM):
         *,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         t0 = time.monotonic()
         kwargs: dict = {"model": self.model, "messages": messages, "timeout": self.timeout}
@@ -66,7 +73,7 @@ class LiteLLMGeneralLLM(GeneralLLM):
             kwargs["api_base"] = self.api_base
         effective_schema = response_schema if response_schema is not None else self.response_schema
         effective_temp = temperature if temperature is not None else self.temperature
-        _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema)
+        _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema, options)
         response = litellm.completion(**kwargs)
         content = response.choices[0].message.content or ""
         return TextResponse(
@@ -104,6 +111,7 @@ class LiteLLMTextGenLLM(TextGenLLM):
         max_retries: int = 3,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         effective_schema = response_schema if response_schema is not None else self.response_schema
         effective_temp = temperature if temperature is not None else self.temperature
@@ -112,7 +120,7 @@ class LiteLLMTextGenLLM(TextGenLLM):
             kwargs: dict = {"model": self.model, "messages": msgs, "timeout": self.timeout}
             if self.api_base:
                 kwargs["api_base"] = self.api_base
-            _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema)
+            _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema, options)
             response = litellm.completion(**kwargs)
             return response.choices[0].message.content or "", self.model
 
@@ -148,6 +156,7 @@ class LiteLLMReasoningLLM(ReasoningLLM):
         thinking_budget: int | None = None,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         t0 = time.monotonic()
         kwargs: dict = {"model": self.model, "messages": messages, "timeout": self.timeout}
@@ -155,7 +164,7 @@ class LiteLLMReasoningLLM(ReasoningLLM):
             kwargs["api_base"] = self.api_base
         effective_schema = response_schema if response_schema is not None else self.response_schema
         effective_temp = temperature if temperature is not None else self.temperature
-        _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema)
+        _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema, options)
         if thinking_budget is not None:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": thinking_budget}
         response = litellm.completion(**kwargs)
@@ -195,10 +204,12 @@ class LiteLLMImageGenLLM(ImageGenLLM):
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
         reference_images: list[bytes] | None = None,
+        weight: float | None = None,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
         num_inference_steps: int | None = None,
+        options: dict | None = None,
     ) -> ImageResponse:
         def call_fn() -> tuple[bytes, str]:
             kwargs: dict = {"model": self.model, "prompt": prompt, "timeout": self.timeout}
@@ -242,6 +253,7 @@ class LiteLLMImageInspectorLLM(ImageInspectorLLM):
         max_retries: int = 3,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         b64 = base64.b64encode(image).decode("ascii")
         messages: list[dict] = [
@@ -261,7 +273,7 @@ class LiteLLMImageInspectorLLM(ImageInspectorLLM):
             kwargs: dict = {"model": self.model, "messages": msgs, "timeout": self.timeout}
             if self.api_base:
                 kwargs["api_base"] = self.api_base
-            _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema)
+            _apply_common(kwargs, effective_temp, self.max_tokens, effective_schema, options)
             response = litellm.completion(**kwargs)
             return response.choices[0].message.content or "", self.model
 
@@ -293,7 +305,12 @@ class LiteLLMToolsLLM(ToolsLLM):
         reset_litellm_client()
 
     def complete(
-        self, messages: list[dict], tools: list[dict], *, max_retries: int = 3
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        max_retries: int = 3,
+        options: dict | None = None,
     ) -> ToolCallResponse:
         t0 = time.monotonic()
         kwargs: dict = {
@@ -304,7 +321,7 @@ class LiteLLMToolsLLM(ToolsLLM):
         }
         if self.api_base:
             kwargs["api_base"] = self.api_base
-        _apply_common(kwargs, self.temperature, self.max_tokens, None)
+        _apply_common(kwargs, self.temperature, self.max_tokens, None, options)
         response = litellm.completion(**kwargs)
         duration_ms = (time.monotonic() - t0) * 1000
 
