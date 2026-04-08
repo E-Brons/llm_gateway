@@ -24,6 +24,7 @@ No running services required — all network and subprocess calls are mocked.
 | `test_core_llm_ollama.py` | All 6 Ollama implementations: happy paths, retry behaviour, payload structure, tool call parsing |
 | `test_core_llm_litellm.py` | All 6 LiteLLM implementations: happy paths, api_base forwarding, thinking budget, tool call parsing |
 | `test_core_llm_cli.py` | All 4 CLI implementations: subprocess format, effort flag, image base64 embedding |
+| `test_core_llm_ipadapter.py` | Both diffusion server implementations: happy path, endpoint routing, payload structure (reference_image / face_image), weight forwarding, model prefix stripping, retry on empty, validator callback, factory integration |
 | `test_core_llm_responses.py` | `TextResponse`, `ImageResponse`, `ToolCall`, `ToolCallResponse`: construction, immutability, optional fields |
 | `test_core_llm_construction_params.py` | temperature / max_tokens / response_schema forwarded correctly per backend |
 | `test_core_llm_retry.py` | `retry_text_completion` and `retry_image_generation`: empty response, exception, exhaustion, correction hint, Transfer-Encoding callback |
@@ -41,12 +42,14 @@ No running services required — all network and subprocess calls are mocked.
 | **Image-gen** | Happy path, missing image retries then raises, `width`/`height`/`seed` in options payload |
 | **Image Inspector** | Happy path, image bytes base64-encoded in payload, multimodal content format (LiteLLM), stream-json embedding (CLI) |
 | **Tools** | Happy path, tool definitions forwarded in payload, tool call parsed from response, no-tool-calls returns empty list, ID generated when Ollama omits it |
+| **ipadapter** | Happy path, POSTs to `/ipadapter`, `reference_image` b64-encoded, `weight` explicit param (default 0.5), `seed`/`steps` omitted when `None`, model prefix stripped, retry on empty, validator callback, factory returns `ImageGenLLM` |
+| **ipadapter_faceid** | Happy path, POSTs to `/ipadapter_faceid`, `face_image` b64-encoded, `weight` explicit param (default 0.5), `seed`/`steps` omitted when `None`, factory returns `ImageGenLLM` |
 
 ### 2. Integration Tests (local, manual)
 
 These require a running Ollama server and are not run in CI. Use `pytest -m integration` when Ollama is available locally.
 
-Fixtures in `conftest.py` skip automatically if Ollama is unreachable:
+Fixtures in `conftest.py` skip automatically if the required service is unreachable:
 
 | Fixture | Purpose |
 |---------|---------|
@@ -54,6 +57,17 @@ Fixtures in `conftest.py` skip automatically if Ollama is unreachable:
 | `ollama_text_model` | Auto-detects a suitable text model from pulled models |
 | `ollama_vision_model` | Auto-detects a vision-capable model |
 | `ollama_image_model` | Auto-detects a diffusion/image-gen model |
+| `diffusion_server_url` | Base URL for IP-Adapter tests (env `DIFFUSION_SERVER_URL`, default `http://localhost:7860`); skips if server not reachable |
+
+#### IP-Adapter sanity tests (`tests/test_ipadapter_sanity.py`)
+
+| Test | What it verifies |
+|------|-----------------|
+| `test_ipadapter_generate_returns_image` | Sends a real request to `/ipadapter`; asserts PNG bytes returned |
+| `test_ipadapter_faceid_generate_returns_image` | Sends a real request to `/ipadapter_faceid`; asserts PNG bytes returned |
+| `test_ipadapter_weight_param_accepted` | Calls with explicit `weight=0.8`; asserts no error, image returned |
+| `test_ipadapter_validator_accepted` | Passes a always-`True` validator; asserts `attempts == 1` |
+| `test_ipadapter_returns_image_gen_llm` | Asserts factory returns `ImageGenLLM` instance, not a bespoke type |
 
 ---
 
@@ -91,6 +105,7 @@ Fixtures in `conftest.py` skip automatically if Ollama is unreachable:
 | LiteLLM (`litellm.completion`) | `patch` on `src.impl.impl_litellm.litellm.completion` |
 | LiteLLM image generation | `patch` on `src.impl.impl_litellm.litellm.image_generation` |
 | Claude CLI (`subprocess.run`) | `patch` on `src.impl.impl_cli.subprocess.run` |
+| Diffusion server HTTP (`requests.post`) | `patch` on `src.impl.impl_ipadapter.requests.post` |
 | `reset_litellm_client` | `patch` on `src.impl.impl_litellm.reset_litellm_client` to isolate init side-effects |
 
 ---
