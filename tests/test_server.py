@@ -323,7 +323,7 @@ def test_ipadapter(client):
     assert base64.b64decode(resp.json()["image_b64"]) == b"\x89PNG"
     factory.ipadapter.return_value.generate.assert_called_once_with(
         "a cat",
-        b"ref_png",
+        reference_images=[b"ref_png"],
         weight=0.5,
         width=256,
         height=256,
@@ -352,7 +352,7 @@ def test_ipadapter_with_params(client):
     assert resp.status_code == 200
     factory.ipadapter.return_value.generate.assert_called_once_with(
         "a cat",
-        b"ref_png",
+        reference_images=[b"ref_png"],
         weight=0.8,
         width=512,
         height=512,
@@ -371,7 +371,7 @@ def test_ipadapter_faceid(client):
     assert base64.b64decode(resp.json()["image_b64"]) == b"\x89PNG"
     factory.ipadapter_faceid.return_value.generate.assert_called_once_with(
         "a portrait",
-        b"face_png",
+        reference_images=[b"face_png"],
         weight=0.5,
         width=256,
         height=256,
@@ -400,7 +400,7 @@ def test_ipadapter_faceid_with_params(client):
     assert resp.status_code == 200
     factory.ipadapter_faceid.return_value.generate.assert_called_once_with(
         "a portrait",
-        b"face_png",
+        reference_images=[b"face_png"],
         weight=0.9,
         width=64,
         height=64,
