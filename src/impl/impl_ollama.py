@@ -48,13 +48,14 @@ def _ollama_chat(
     temperature: float | None = None,
     max_tokens: int | None = None,
     response_schema: dict | None = None,
+    extra: dict | None = None,
 ) -> tuple[str, str]:
     payload: dict = {
         "model": _bare_model(model),
         "messages": messages,
         "stream": False,
     }
-    options = _build_options(temperature, max_tokens)
+    options = _build_options(temperature, max_tokens, extra=extra)
     if options:
         payload["options"] = options
     if response_schema is not None:
@@ -81,6 +82,7 @@ def _ollama_generate(
     width: int | None = None,
     height: int | None = None,
     seed: int | None = None,
+    extra: dict | None = None,
 ) -> tuple[str, str]:
     payload: dict = {
         "model": _bare_model(model),
@@ -92,7 +94,7 @@ def _ollama_generate(
     if images:
         payload["images"] = images
 
-    gen_options = _build_options(temperature, max_tokens)
+    gen_options = _build_options(temperature, max_tokens, extra=extra)
     if width:
         gen_options["width"] = width
     if height:
@@ -136,6 +138,7 @@ class OllamaGeneralLLM(GeneralLLM):
         *,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         t0 = time.monotonic()
         effective_schema = response_schema if response_schema is not None else self.response_schema
@@ -148,6 +151,7 @@ class OllamaGeneralLLM(GeneralLLM):
             temperature=effective_temp,
             max_tokens=self.max_tokens,
             response_schema=effective_schema,
+            extra=options,
         )
         return TextResponse(
             content=content,
@@ -183,6 +187,7 @@ class OllamaTextGenLLM(TextGenLLM):
         max_retries: int = 3,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         effective_schema = response_schema if response_schema is not None else self.response_schema
         effective_temp = temperature if temperature is not None else self.temperature
@@ -196,6 +201,7 @@ class OllamaTextGenLLM(TextGenLLM):
                 temperature=effective_temp,
                 max_tokens=self.max_tokens,
                 response_schema=effective_schema,
+                extra=options,
             )
 
         return retry_text_completion(call_fn, messages, max_retries, self.model)
@@ -229,6 +235,7 @@ class OllamaReasoningLLM(ReasoningLLM):
         thinking_budget: int | None = None,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         t0 = time.monotonic()
         effective_schema = response_schema if response_schema is not None else self.response_schema
@@ -241,6 +248,7 @@ class OllamaReasoningLLM(ReasoningLLM):
             temperature=effective_temp,
             max_tokens=self.max_tokens,
             response_schema=effective_schema,
+            extra=options,
         )
         return TextResponse(
             content=content,
@@ -276,10 +284,12 @@ class OllamaImageGenLLM(ImageGenLLM):
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
         reference_images: list[bytes] | None = None,
+        weight: float | None = None,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
         num_inference_steps: int | None = None,
+        options: dict | None = None,
     ) -> ImageResponse:
         images_b64 = (
             [base64.b64encode(img).decode("ascii") for img in reference_images]
@@ -301,6 +311,9 @@ class OllamaImageGenLLM(ImageGenLLM):
                 payload["steps"] = num_inference_steps
             if images_b64:
                 payload["images"] = images_b64
+            opts = _build_options(self.temperature, self.max_tokens, extra=options)
+            if opts:
+                payload["options"] = opts
 
             resp = requests.post(
                 f"{self.ollama_url}/api/generate", json=payload, timeout=self.timeout
@@ -345,6 +358,7 @@ class OllamaImageInspectorLLM(ImageInspectorLLM):
         max_retries: int = 3,
         temperature: float | None = None,
         response_schema: dict | None = None,
+        options: dict | None = None,
     ) -> TextResponse:
         image_b64 = base64.b64encode(image).decode("ascii")
         effective_schema = response_schema if response_schema is not None else self.response_schema
@@ -361,6 +375,7 @@ class OllamaImageInspectorLLM(ImageInspectorLLM):
                 temperature=effective_temp,
                 max_tokens=self.max_tokens,
                 response_schema=effective_schema,
+                extra=options,
             )
 
         messages: list[dict] = [{"role": "user", "content": prompt}]
@@ -389,7 +404,7 @@ class OllamaToolsLLM(ToolsLLM):
         self.ollama_url = ollama_url
 
     def complete(
-        self, messages: list[dict], tools: list[dict], *, max_retries: int = 3
+        self, messages: list[dict], tools: list[dict], *, max_retries: int = 3, options: dict | None = None
     ) -> ToolCallResponse:
         t0 = time.monotonic()
         payload: dict = {
@@ -398,9 +413,9 @@ class OllamaToolsLLM(ToolsLLM):
             "tools": tools,
             "stream": False,
         }
-        options = _build_options(self.temperature, self.max_tokens)
-        if options:
-            payload["options"] = options
+        opts = _build_options(self.temperature, self.max_tokens, extra=options)
+        if opts:
+            payload["options"] = opts
 
         resp = requests.post(f"{self.ollama_url}/api/chat", json=payload, timeout=self.timeout)
         resp.raise_for_status()

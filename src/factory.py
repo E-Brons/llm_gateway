@@ -36,8 +36,6 @@ from .types import (
     GeneralLLM,
     ImageGenLLM,
     ImageInspectorLLM,
-    IPAdapterFaceIDLLM,
-    IPAdapterLLM,
     ReasoningLLM,
     TextGenLLM,
     ToolsLLM,
@@ -118,14 +116,14 @@ class LLMFactory:
     def tools(self) -> ToolsLLM:
         return _build("tools", self._config.tools)
 
-    def ipadapter(self) -> IPAdapterLLM:
+    def ipadapter(self) -> ImageGenLLM:
         if self._config.ipadapter is None:
             raise ValueError(
                 "ipadapter is not configured. Add an 'ipadapter' section to llm_route.yml."
             )
         return _build("ipadapter", self._config.ipadapter)
 
-    def ipadapter_faceid(self) -> IPAdapterFaceIDLLM:
+    def ipadapter_faceid(self) -> ImageGenLLM:
         if self._config.ipadapter_faceid is None:
             raise ValueError(
                 "ipadapter_faceid is not configured. "
