@@ -224,5 +224,73 @@ class ToolsLLM(ABC):
         """Send *messages* with *tools* definitions and return a ToolCallResponse."""
 
 
+class IPAdapterLLM(ABC):
+    """Image generation conditioned on a reference image via IP-Adapter."""
+
+    def __init__(
+        self,
+        model: str,
+        timeout: int = 300,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        self.model = model
+        self.timeout = timeout
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.response_schema = response_schema
+
+    @abstractmethod
+    def generate(
+        self,
+        prompt: str,
+        reference_image: bytes,
+        *,
+        max_retries: int = 3,
+        validator: Callable[[bytes], bool] | None = None,
+        weight: float = 0.5,
+        width: int = 256,
+        height: int = 256,
+        seed: int | None = None,
+        num_inference_steps: int | None = None,
+    ) -> "ImageResponse":  # noqa: F821
+        """Generate an image conditioned on *reference_image* and return an ImageResponse."""
+
+
+class IPAdapterFaceIDLLM(ABC):
+    """Image generation conditioned on a face image via IP-Adapter FaceID."""
+
+    def __init__(
+        self,
+        model: str,
+        timeout: int = 300,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        response_schema: dict | None = None,
+    ) -> None:
+        self.model = model
+        self.timeout = timeout
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.response_schema = response_schema
+
+    @abstractmethod
+    def generate(
+        self,
+        prompt: str,
+        face_image: bytes,
+        *,
+        max_retries: int = 3,
+        validator: Callable[[bytes], bool] | None = None,
+        weight: float = 0.5,
+        width: int = 256,
+        height: int = 256,
+        seed: int | None = None,
+        num_inference_steps: int | None = None,
+    ) -> "ImageResponse":  # noqa: F821
+        """Generate an image conditioned on *face_image* and return an ImageResponse."""
+
+
 # Avoid circular import — import response types only for type annotations
 from .responses import ImageResponse, TextResponse, ToolCallResponse  # noqa: E402, F401
