@@ -74,8 +74,8 @@ def _dtype(device: str) -> torch.dtype:
 # Pipeline cache — one pipeline kept loaded at a time
 # ---------------------------------------------------------------------------
 
-_cache: dict[str, Any] = {}          # {"model": pipe}
-_face_app: Any = None                 # insightface FaceAnalysis singleton
+_cache: dict[str, Any] = {}  # {"model": pipe}
+_face_app: Any = None  # insightface FaceAnalysis singleton
 _lock = threading.Lock()
 
 
@@ -123,6 +123,7 @@ def _get_face_app() -> Any:
     with _lock:
         if _face_app is None:
             from insightface.app import FaceAnalysis
+
             logger.info("Loading InsightFace buffalo_l …")
             _face_app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
             _face_app.prepare(ctx_id=0, det_size=(640, 640))
@@ -203,9 +204,7 @@ def generate_ipadapter_faceid(
         raise ValueError("No face detected in the provided image")
 
     faceid_embeds = (
-        torch.from_numpy(faces[0].normed_embedding)
-        .unsqueeze(0)
-        .to(dev, dtype=_dtype(dev))
+        torch.from_numpy(faces[0].normed_embedding).unsqueeze(0).to(dev, dtype=_dtype(dev))
     )
 
     pipe.set_ip_adapter_scale(weight)

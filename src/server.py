@@ -524,7 +524,11 @@ def list_models():
             bare = entry["model"].removeprefix("diffusion/")
             entry["available"] = bare in diffusion_available
 
-    return {"configured": configured, "ollama_available": ollama_pulled, "diffusion_available": diffusion_available}
+    return {
+        "configured": configured,
+        "ollama_available": ollama_pulled,
+        "diffusion_available": diffusion_available,
+    }
 
 
 @app.post("/general")

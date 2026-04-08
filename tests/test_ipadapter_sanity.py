@@ -57,8 +57,8 @@ _FACEID_MODEL = os.environ.get("IPADAPTER_FACEID_MODEL", "ip-adapter-faceid-plus
 
 def test_ipadapter_returns_image_gen_llm(diffusion_server_url):
     """factory.ipadapter() returns an ImageGenLLM — not a bespoke type."""
-    from src.factory import LLMFactory
     from src.config import LLMConfig, LLMTypeConfig
+    from src.factory import LLMFactory
     from src.types import ImageGenLLM
 
     cfg = LLMConfig(
@@ -169,8 +169,8 @@ def test_ipadapter_seed_produces_deterministic_output(diffusion_server_url):
 
 def test_ipadapter_faceid_returns_image_gen_llm(diffusion_server_url):
     """factory.ipadapter_faceid() returns an ImageGenLLM — not a bespoke type."""
-    from src.factory import LLMFactory
     from src.config import LLMConfig, LLMTypeConfig
+    from src.factory import LLMFactory
     from src.types import ImageGenLLM
 
     cfg = LLMConfig(

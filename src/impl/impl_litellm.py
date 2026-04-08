@@ -23,7 +23,11 @@ from ..types import (
 
 
 def _apply_common(
-    kwargs: dict, temperature: float | None, max_tokens: int | None, response_schema: dict | None, options: dict | None = None
+    kwargs: dict,
+    temperature: float | None,
+    max_tokens: int | None,
+    response_schema: dict | None,
+    options: dict | None = None,
 ) -> None:
     if temperature is not None:
         kwargs["temperature"] = temperature
@@ -301,7 +305,12 @@ class LiteLLMToolsLLM(ToolsLLM):
         reset_litellm_client()
 
     def complete(
-        self, messages: list[dict], tools: list[dict], *, max_retries: int = 3, options: dict | None = None
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        max_retries: int = 3,
+        options: dict | None = None,
     ) -> ToolCallResponse:
         t0 = time.monotonic()
         kwargs: dict = {

@@ -94,5 +94,5 @@ def diffusion_server_url() -> str:
         proc = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=10)
         if proc.returncode != 0:
             pytest.skip("claude CLI not available")
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except FileNotFoundError, subprocess.TimeoutExpired:
         pytest.skip("claude CLI not found")

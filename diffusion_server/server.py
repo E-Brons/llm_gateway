@@ -16,14 +16,12 @@ import base64
 import logging
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-
 from pipeline import (
-    KNOWN_MODELS,
+    _REGISTRY,
     generate_ipadapter,
     generate_ipadapter_faceid,
-    _REGISTRY,
 )
+from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
 logger = logging.getLogger("diffusion_server")
@@ -37,7 +35,7 @@ app = FastAPI(title="Diffusion Server — IP-Adapter")
 class IPAdapterRequest(BaseModel):
     model: str
     prompt: str
-    reference_image: str   # base64 PNG
+    reference_image: str  # base64 PNG
     weight: float = 0.5
     width: int = 256
     height: int = 256
@@ -48,7 +46,7 @@ class IPAdapterRequest(BaseModel):
 class IPAdapterFaceIDRequest(BaseModel):
     model: str
     prompt: str
-    face_image: str        # base64 PNG
+    face_image: str  # base64 PNG
     weight: float = 0.5
     width: int = 256
     height: int = 256

@@ -404,7 +404,12 @@ class OllamaToolsLLM(ToolsLLM):
         self.ollama_url = ollama_url
 
     def complete(
-        self, messages: list[dict], tools: list[dict], *, max_retries: int = 3, options: dict | None = None
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        max_retries: int = 3,
+        options: dict | None = None,
     ) -> ToolCallResponse:
         t0 = time.monotonic()
         payload: dict = {
