@@ -156,6 +156,84 @@ def test_cli_accepts_construction_params():
 
 
 # ---------------------------------------------------------------------------
+# Per-call response_schema overrides construction-time schema
+# ---------------------------------------------------------------------------
+
+
+def test_ollama_per_call_schema_overrides_config_schema():
+    """A schema passed to complete() is used instead of the one set at construction time."""
+    from src.impl.impl_ollama import OllamaGeneralLLM
+
+    config_schema = {"type": "object", "properties": {"old": {"type": "string"}}}
+    call_schema = {"type": "object", "properties": {"name": {"type": "string"}}}
+
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response('{"name":"x"}')
+    ) as mock_post:
+        llm = OllamaGeneralLLM(model="phi3", ollama_url=_OLLAMA_URL, response_schema=config_schema)
+        llm.complete([{"role": "user", "content": "x"}], response_schema=call_schema)
+
+    assert mock_post.call_args[1]["json"]["format"] == call_schema
+
+
+def test_ollama_per_call_schema_used_when_no_config_schema():
+    """A schema passed to complete() is applied even without a config-level schema."""
+    from src.impl.impl_ollama import OllamaGeneralLLM
+
+    call_schema = {"type": "object", "properties": {"value": {"type": "integer"}}}
+
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=_mock_chat_response('{"value":1}')
+    ) as mock_post:
+        llm = OllamaGeneralLLM(model="phi3", ollama_url=_OLLAMA_URL)
+        llm.complete([{"role": "user", "content": "x"}], response_schema=call_schema)
+
+    assert mock_post.call_args[1]["json"]["format"] == call_schema
+
+
+def test_litellm_per_call_schema_overrides_config_schema():
+    """A schema passed to complete() supersedes the construction-time schema for LiteLLM."""
+    from src.impl.impl_litellm import LiteLLMGeneralLLM
+
+    config_schema = {"type": "json_object"}
+    call_schema = {"type": "json_schema", "json_schema": {"name": "result", "schema": {}}}
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion",
+            return_value=_mock_litellm_completion('{"ok":true}'),
+        ) as mock_c:
+            llm = LiteLLMGeneralLLM(model="gpt-4o", response_schema=config_schema)
+            llm.complete([{"role": "user", "content": "x"}], response_schema=call_schema)
+
+    assert mock_c.call_args[1]["response_format"] == call_schema
+
+
+def test_cli_per_call_schema_injected_as_system_message():
+    """For the CLI backend the schema is injected as a system-prompt instruction."""
+    from unittest.mock import patch
+
+    from src.impl.impl_cli import CLITextGenLLM
+
+    call_schema = {"type": "object", "properties": {"answer": {"type": "string"}}}
+
+    captured: dict = {}
+
+    def fake_stream_json(msgs, *, timeout=120, effort=None):
+        captured["msgs"] = msgs
+        return '{"answer":"42"}', 100.0
+
+    with patch("src.impl.impl_cli._run_claude_stream_json", side_effect=fake_stream_json):
+        llm = CLITextGenLLM(model="claude")
+        llm.complete([{"role": "user", "content": "What is 6*7?"}], response_schema=call_schema)
+
+    # The first message should be a system message containing schema instructions
+    first = captured["msgs"][0]
+    assert first["role"] == "system"
+    assert "answer" in first["content"]  # schema property appears in the instruction
+
+
+# ---------------------------------------------------------------------------
 # Factory — passes temperature/max_tokens from config
 # ---------------------------------------------------------------------------
 

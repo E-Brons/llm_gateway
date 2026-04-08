@@ -258,11 +258,15 @@ def _f() -> LLMFactory:
 class MessageRequest(BaseModel):
     messages: list[dict[str, Any]]
     max_retries: int = 3
+    temperature: float | None = None
+    response_schema: dict[str, Any] | None = None
 
 
 class ReasoningRequest(BaseModel):
     messages: list[dict[str, Any]]
     thinking_budget: int | None = None
+    temperature: float | None = None
+    response_schema: dict[str, Any] | None = None
 
 
 class ImageGenRequest(BaseModel):
@@ -280,6 +284,8 @@ class ImageInspectRequest(BaseModel):
     system: str
     prompt: str
     max_retries: int = 3
+    temperature: float | None = None
+    response_schema: dict[str, Any] | None = None
 
 
 class ToolsRequest(BaseModel):
@@ -424,17 +430,42 @@ def list_models():
 
 @app.post("/general")
 def general(req: MessageRequest):
-    return _f().general().complete(req.messages).model_dump()
+    return (
+        _f()
+        .general()
+        .complete(req.messages, temperature=req.temperature, response_schema=req.response_schema)
+        .model_dump()
+    )
 
 
 @app.post("/text_gen")
 def text_gen(req: MessageRequest):
-    return _f().text_gen().complete(req.messages, max_retries=req.max_retries).model_dump()
+    return (
+        _f()
+        .text_gen()
+        .complete(
+            req.messages,
+            max_retries=req.max_retries,
+            temperature=req.temperature,
+            response_schema=req.response_schema,
+        )
+        .model_dump()
+    )
 
 
 @app.post("/reasoning")
 def reasoning(req: ReasoningRequest):
-    return _f().reasoning().complete(req.messages, thinking_budget=req.thinking_budget).model_dump()
+    return (
+        _f()
+        .reasoning()
+        .complete(
+            req.messages,
+            thinking_budget=req.thinking_budget,
+            temperature=req.temperature,
+            response_schema=req.response_schema,
+        )
+        .model_dump()
+    )
 
 
 @app.post("/image_gen")
@@ -473,7 +504,14 @@ def image_inspector(req: ImageInspectRequest):
     return (
         _f()
         .image_inspector()
-        .inspect(image, req.system, req.prompt, max_retries=req.max_retries)
+        .inspect(
+            image,
+            req.system,
+            req.prompt,
+            max_retries=req.max_retries,
+            temperature=req.temperature,
+            response_schema=req.response_schema,
+        )
         .model_dump()
     )
 

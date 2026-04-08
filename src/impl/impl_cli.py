@@ -27,6 +27,27 @@ logger = logging.getLogger(__name__)
 _CLI_CMD = "claude"
 
 
+def _schema_instruction(schema: dict) -> str:
+    """Return a system-prompt fragment instructing the model to emit schema-valid JSON."""
+    return (
+        "You must respond with valid JSON that strictly matches the following schema. "
+        "Output only the JSON object — no markdown fences, no explanation.\n"
+        f"Schema:\n{json.dumps(schema, indent=2)}"
+    )
+
+
+def _inject_schema(messages: list[dict], schema: dict) -> list[dict]:
+    """Prepend or merge the schema instruction into the system message."""
+    instruction = _schema_instruction(schema)
+    msgs = list(messages)
+    for i, msg in enumerate(msgs):
+        if msg.get("role") == "system":
+            existing = msg.get("content", "") or ""
+            msgs[i] = {**msg, "content": f"{instruction}\n\n{existing}"}
+            return msgs
+    return [{"role": "system", "content": instruction}] + msgs
+
+
 def _run_claude(prompt: str, *, system: str | None = None, timeout: int = 120) -> tuple[str, float]:
     cmd = [_CLI_CMD, "--print", "--output-format", "json"]
     if system:
@@ -51,9 +72,6 @@ def _run_claude_stream_json(
 ) -> tuple[str, float]:
     cmd = [
         _CLI_CMD,
-        "-p",
-        "",
-        "--verbose",
         "--output-format",
         "stream-json",
         "--input-format",
@@ -132,9 +150,17 @@ class CLIGeneralLLM(GeneralLLM):
             response_schema=response_schema,
         )
 
-    def complete(self, messages: list[dict]) -> TextResponse:
-        system = next((m["content"] for m in messages if m.get("role") == "system"), None)
-        user_msgs = [m for m in messages if m.get("role") != "system"]
+    def complete(
+        self,
+        messages: list[dict],
+        *,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
+    ) -> TextResponse:
+        effective_schema = response_schema if response_schema is not None else self.response_schema
+        msgs = _inject_schema(messages, effective_schema) if effective_schema else messages
+        system = next((m["content"] for m in msgs if m.get("role") == "system"), None)
+        user_msgs = [m for m in msgs if m.get("role") != "system"]
         prompt = "\n\n".join(
             m["content"] if isinstance(m["content"], str) else json.dumps(m["content"])
             for m in user_msgs
@@ -160,12 +186,22 @@ class CLITextGenLLM(TextGenLLM):
             response_schema=response_schema,
         )
 
-    def complete(self, messages: list[dict], *, max_retries: int = 3) -> TextResponse:
+    def complete(
+        self,
+        messages: list[dict],
+        *,
+        max_retries: int = 3,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
+    ) -> TextResponse:
+        effective_schema = response_schema if response_schema is not None else self.response_schema
+        base_msgs = _inject_schema(messages, effective_schema) if effective_schema else messages
+
         def call_fn(msgs: list[dict]) -> tuple[str, str]:
             content, _ = _run_claude_stream_json(msgs, timeout=self.timeout)
             return content, self.model
 
-        return retry_text_completion(call_fn, messages, max_retries, self.model)
+        return retry_text_completion(call_fn, base_msgs, max_retries, self.model)
 
 
 class CLIReasoningLLM(ReasoningLLM):
@@ -187,10 +223,17 @@ class CLIReasoningLLM(ReasoningLLM):
             response_schema=response_schema,
         )
 
-    def complete(self, messages: list[dict], *, thinking_budget: int | None = None) -> TextResponse:
-        content, duration_ms = _run_claude_stream_json(
-            messages, timeout=self.timeout, effort="high"
-        )
+    def complete(
+        self,
+        messages: list[dict],
+        *,
+        thinking_budget: int | None = None,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
+    ) -> TextResponse:
+        effective_schema = response_schema if response_schema is not None else self.response_schema
+        msgs = _inject_schema(messages, effective_schema) if effective_schema else messages
+        content, duration_ms = _run_claude_stream_json(msgs, timeout=self.timeout, effort="high")
         return TextResponse(content=content, model=self.model, duration_ms=duration_ms, attempts=1)
 
 
@@ -198,7 +241,7 @@ class CLIImageInspectorLLM(ImageInspectorLLM):
     def __init__(
         self,
         model: str = "claude",
-        timeout: int = 90,
+        timeout: int = 300,
         temperature: float | None = None,
         max_tokens: int | None = None,
         response_schema: dict | None = None,
@@ -212,7 +255,14 @@ class CLIImageInspectorLLM(ImageInspectorLLM):
         )
 
     def inspect(
-        self, image: bytes, system: str, prompt: str, *, max_retries: int = 3
+        self,
+        image: bytes,
+        system: str,
+        prompt: str,
+        *,
+        max_retries: int = 3,
+        temperature: float | None = None,
+        response_schema: dict | None = None,
     ) -> TextResponse:
         b64 = base64.b64encode(image).decode("ascii")
         messages: list[dict] = [
@@ -228,9 +278,11 @@ class CLIImageInspectorLLM(ImageInspectorLLM):
                 ],
             },
         ]
+        effective_schema = response_schema if response_schema is not None else self.response_schema
+        base_msgs = _inject_schema(messages, effective_schema) if effective_schema else messages
 
         def call_fn(msgs: list[dict]) -> tuple[str, str]:
             content, _ = _run_claude_stream_json(msgs, timeout=self.timeout)
             return content, self.model
 
-        return retry_text_completion(call_fn, messages, max_retries, self.model)
+        return retry_text_completion(call_fn, base_msgs, max_retries, self.model)
