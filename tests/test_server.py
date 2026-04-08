@@ -226,6 +226,105 @@ def test_tools(client):
     assert data["tool_calls"][0]["name"] == "get_weather"
 
 
+# ── ipadapter endpoints ───────────────────────────────────────────────────────
+
+
+def test_ipadapter(client):
+    c, factory = client
+    factory.ipadapter.return_value.generate.return_value = _image()
+    ref_b64 = base64.b64encode(b"ref_png").decode()
+    resp = c.post("/ipadapter", json={"prompt": "a cat", "reference_image_b64": ref_b64})
+    assert resp.status_code == 200
+    assert base64.b64decode(resp.json()["image_b64"]) == b"\x89PNG"
+    factory.ipadapter.return_value.generate.assert_called_once_with(
+        "a cat",
+        b"ref_png",
+        weight=0.5,
+        width=256,
+        height=256,
+        seed=None,
+        num_inference_steps=3,
+        max_retries=3,
+    )
+
+
+def test_ipadapter_with_params(client):
+    c, factory = client
+    factory.ipadapter.return_value.generate.return_value = _image()
+    ref_b64 = base64.b64encode(b"ref_png").decode()
+    resp = c.post(
+        "/ipadapter",
+        json={
+            "prompt": "a cat",
+            "reference_image_b64": ref_b64,
+            "weight": 0.8,
+            "width": 512,
+            "height": 512,
+            "seed": 42,
+            "optimize": "quality",
+        },
+    )
+    assert resp.status_code == 200
+    factory.ipadapter.return_value.generate.assert_called_once_with(
+        "a cat",
+        b"ref_png",
+        weight=0.8,
+        width=512,
+        height=512,
+        seed=42,
+        num_inference_steps=4,
+        max_retries=3,
+    )
+
+
+def test_ipadapter_faceid(client):
+    c, factory = client
+    factory.ipadapter_faceid.return_value.generate.return_value = _image()
+    face_b64 = base64.b64encode(b"face_png").decode()
+    resp = c.post("/ipadapter_faceid", json={"prompt": "a portrait", "face_image_b64": face_b64})
+    assert resp.status_code == 200
+    assert base64.b64decode(resp.json()["image_b64"]) == b"\x89PNG"
+    factory.ipadapter_faceid.return_value.generate.assert_called_once_with(
+        "a portrait",
+        b"face_png",
+        weight=0.5,
+        width=256,
+        height=256,
+        seed=None,
+        num_inference_steps=3,
+        max_retries=3,
+    )
+
+
+def test_ipadapter_faceid_with_params(client):
+    c, factory = client
+    factory.ipadapter_faceid.return_value.generate.return_value = _image()
+    face_b64 = base64.b64encode(b"face_png").decode()
+    resp = c.post(
+        "/ipadapter_faceid",
+        json={
+            "prompt": "a portrait",
+            "face_image_b64": face_b64,
+            "weight": 0.9,
+            "width": 64,
+            "height": 64,
+            "seed": 1,
+            "optimize": "fast",
+        },
+    )
+    assert resp.status_code == 200
+    factory.ipadapter_faceid.return_value.generate.assert_called_once_with(
+        "a portrait",
+        b"face_png",
+        weight=0.9,
+        width=64,
+        height=64,
+        seed=1,
+        num_inference_steps=2,
+        max_retries=3,
+    )
+
+
 # ── error paths ───────────────────────────────────────────────────────────────
 
 

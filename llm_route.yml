@@ -31,3 +31,13 @@ tools:
   implementation: ollama
   model: qwen3.5:9b
   ollama_url: http://localhost:11434
+
+ipadapter:
+  implementation: diffusion_server
+  model: ip-adapter_sd15_light_v11
+  api_base: http://localhost:7860
+
+ipadapter_faceid:
+  implementation: diffusion_server
+  model: ip-adapter-faceid-plus_sd15
+  api_base: http://localhost:7860

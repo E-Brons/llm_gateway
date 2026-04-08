@@ -31,6 +31,8 @@ _TASK_CAPABILITY: dict[str, str] = {
     "image_gen": "image_gen",
     "image_inspector": "visual",
     "tools": "tools",
+    "ipadapter": "image_gen",
+    "ipadapter_faceid": "image_gen",
 }
 
 _SANITY_TOOLS = [
@@ -110,6 +112,36 @@ def _run_sanity_checks(factory: LLMFactory) -> None:
             ),
         ),
     ]
+
+    if _config is not None and _config.ipadapter is not None:
+        checks.append(
+            (
+                "ipadapter",
+                lambda: factory.ipadapter().generate(
+                    "a solid red square",
+                    _minimal_png(),
+                    width=32,
+                    height=32,
+                    num_inference_steps=1,
+                    max_retries=1,
+                ),
+            )
+        )
+
+    if _config is not None and _config.ipadapter_faceid is not None:
+        checks.append(
+            (
+                "ipadapter_faceid",
+                lambda: factory.ipadapter_faceid().generate(
+                    "a portrait",
+                    _minimal_png(),
+                    width=32,
+                    height=32,
+                    num_inference_steps=1,
+                    max_retries=1,
+                ),
+            )
+        )
 
     logger.info(sep)
     logger.info("  Sanity checks")
@@ -195,6 +227,16 @@ def _log_startup(
         f"    image_inspector {config.image_inspector.implementation} / {config.image_inspector.model}",
         f"    tools          {config.tools.implementation} / {config.tools.model}",
     ]
+
+    if config.ipadapter is not None:
+        lines.append(
+            f"    ipadapter      {config.ipadapter.implementation} / {config.ipadapter.model}"
+        )
+    if config.ipadapter_faceid is not None:
+        lines.append(
+            f"    ipadapter_faceid {config.ipadapter_faceid.implementation}"
+            f" / {config.ipadapter_faceid.model}"
+        )
 
     if settings:
         lines += [
@@ -288,6 +330,28 @@ class ToolsRequest(BaseModel):
     max_retries: int = 3
 
 
+class IPAdapterRequest(BaseModel):
+    prompt: str
+    reference_image_b64: str  # base64-encoded reference PNG
+    weight: float = 0.5
+    width: int = 256
+    height: int = 256
+    seed: int | None = None
+    optimize: Literal["quality", "normal", "fast"] = "normal"
+    max_retries: int = 3
+
+
+class IPAdapterFaceIDRequest(BaseModel):
+    prompt: str
+    face_image_b64: str  # base64-encoded face PNG
+    weight: float = 0.5
+    width: int = 256
+    height: int = 256
+    seed: int | None = None
+    optimize: Literal["quality", "normal", "fast"] = "normal"
+    max_retries: int = 3
+
+
 # ── Routes ─────────────────────────────────────────────────────────────────
 
 
@@ -320,6 +384,8 @@ def ollama_tags():
         _config.image_gen,
         _config.image_inspector,
         _config.tools,
+        *([_config.ipadapter] if _config.ipadapter is not None else []),
+        *([_config.ipadapter_faceid] if _config.ipadapter_faceid is not None else []),
     ]:
         name = cfg.model.removeprefix("ollama/")
         if name not in seen:
@@ -354,6 +420,12 @@ def openai_models():
         ("image_gen", _config.image_gen),
         ("image_inspector", _config.image_inspector),
         ("tools", _config.tools),
+        *([("ipadapter", _config.ipadapter)] if _config.ipadapter is not None else []),
+        *(
+            [("ipadapter_faceid", _config.ipadapter_faceid)]
+            if _config.ipadapter_faceid is not None
+            else []
+        ),
     ]:
         model_id = cfg.model.removeprefix("ollama/")
         if model_id not in seen:
@@ -376,6 +448,12 @@ def list_models():
         ("image_gen", _config.image_gen),
         ("image_inspector", _config.image_inspector),
         ("tools", _config.tools),
+        *([("ipadapter", _config.ipadapter)] if _config.ipadapter is not None else []),
+        *(
+            [("ipadapter_faceid", _config.ipadapter_faceid)]
+            if _config.ipadapter_faceid is not None
+            else []
+        ),
     ]
 
     groups: dict[tuple[str, str], dict] = {}
@@ -481,3 +559,57 @@ def image_inspector(req: ImageInspectRequest):
 @app.post("/tools")
 def tools(req: ToolsRequest):
     return _f().tools().complete(req.messages, req.tools, max_retries=req.max_retries).model_dump()
+
+
+@app.post("/ipadapter")
+def ipadapter(req: IPAdapterRequest):
+    _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
+    reference_image = base64.b64decode(req.reference_image_b64)
+    resp = (
+        _f()
+        .ipadapter()
+        .generate(
+            req.prompt,
+            reference_image,
+            weight=req.weight,
+            width=req.width,
+            height=req.height,
+            seed=req.seed,
+            num_inference_steps=_OPTIMIZE_STEPS[req.optimize],
+            max_retries=req.max_retries,
+        )
+    )
+    return {
+        "image_b64": base64.b64encode(resp.image).decode(),
+        "model": resp.model,
+        "duration_ms": resp.duration_ms,
+        "attempts": resp.attempts,
+        "last_error": resp.last_error,
+    }
+
+
+@app.post("/ipadapter_faceid")
+def ipadapter_faceid(req: IPAdapterFaceIDRequest):
+    _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
+    face_image = base64.b64decode(req.face_image_b64)
+    resp = (
+        _f()
+        .ipadapter_faceid()
+        .generate(
+            req.prompt,
+            face_image,
+            weight=req.weight,
+            width=req.width,
+            height=req.height,
+            seed=req.seed,
+            num_inference_steps=_OPTIMIZE_STEPS[req.optimize],
+            max_retries=req.max_retries,
+        )
+    )
+    return {
+        "image_b64": base64.b64encode(resp.image).decode(),
+        "model": resp.model,
+        "duration_ms": resp.duration_ms,
+        "attempts": resp.attempts,
+        "last_error": resp.last_error,
+    }
