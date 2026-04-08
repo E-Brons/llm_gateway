@@ -1,6 +1,7 @@
 """Shared pytest fixtures for llm_gateway tests."""
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -71,3 +72,27 @@ def ollama_image_model(ollama_url: str, _ollama_model_list: list[str]) -> str:
         if any(kw in name.lower() for kw in _IMAGE_KEYWORDS):
             return name
     pytest.skip("No image generation model available on Ollama")
+
+
+@pytest.fixture(scope="session")
+def diffusion_server_url() -> str:
+    """Base URL for IP-Adapter diffusion server tests.
+
+    Skip the test if the server is not reachable.
+    Override with env var DIFFUSION_SERVER_URL (default http://localhost:7860).
+    """
+    url = os.environ.get("DIFFUSION_SERVER_URL", "http://localhost:7860")
+    try:
+        r = requests.get(f"{url}/health", timeout=5)
+        if r.status_code not in (200, 404):  # 404 = server running but no /health route
+            pytest.skip(f"Diffusion server not healthy at {url}")
+    except Exception:
+        pytest.skip(f"Diffusion server not reachable at {url}")
+    return url
+    """Skip if the `claude` CLI is not installed or not authenticated."""
+    try:
+        proc = subprocess.run(["claude", "--version"], capture_output=True, text=True, timeout=10)
+        if proc.returncode != 0:
+            pytest.skip("claude CLI not available")
+    except FileNotFoundError, subprocess.TimeoutExpired:
+        pytest.skip("claude CLI not found")
