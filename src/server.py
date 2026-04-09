@@ -308,15 +308,18 @@ def _is_timeout_exc(exc: BaseException) -> bool:
     return "timed out" in msg or "read timeout" in msg
 
 
-@app.exception_handler(Exception)
-async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    if isinstance(exc, HTTPException):
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-    if _is_timeout_exc(exc):
-        logger.warning("Timeout on %s: %s", request.url.path, exc)
-        return JSONResponse(status_code=504, content={"detail": f"Upstream timeout: {exc}"})
-    logger.exception("Unhandled error on %s", request.url.path)
-    return JSONResponse(status_code=502, content={"detail": str(exc)})
+@app.middleware("http")
+async def _exception_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        if _is_timeout_exc(exc):
+            logger.warning("Timeout on %s: %s", request.url.path, exc)
+            return JSONResponse(status_code=504, content={"detail": f"Upstream timeout: {exc}"})
+        logger.error("Error on %s: %s", request.url.path, exc)
+        return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
 def _f() -> LLMFactory:
