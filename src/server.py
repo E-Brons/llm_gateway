@@ -13,7 +13,8 @@ from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 import requests as _requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .config import LLMConfig, load_llm_config
@@ -288,6 +289,36 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="LLM Gateway", lifespan=lifespan)
 
 
+def _is_timeout_exc(exc: BaseException) -> bool:
+    try:
+        import requests.exceptions
+
+        if isinstance(exc, (requests.exceptions.Timeout, requests.exceptions.ReadTimeout)):
+            return True
+    except ImportError:
+        pass
+    try:
+        import httpx
+
+        if isinstance(exc, (httpx.TimeoutException, httpx.ReadTimeout)):
+            return True
+    except ImportError:
+        pass
+    msg = str(exc).lower()
+    return "timed out" in msg or "read timeout" in msg
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    if _is_timeout_exc(exc):
+        logger.warning("Timeout on %s: %s", request.url.path, exc)
+        return JSONResponse(status_code=504, content={"detail": f"Upstream timeout: {exc}"})
+    logger.exception("Unhandled error on %s", request.url.path)
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
 def _f() -> LLMFactory:
     if _factory is None:
         raise HTTPException(503, "Factory not initialised")
@@ -349,7 +380,7 @@ class IPAdapterRequest(BaseModel):
 
 class IPAdapterFaceIDRequest(BaseModel):
     prompt: str
-    face_image_b64: str  # base64-encoded face PNG
+    face_images_b64: list[str]  # base64-encoded face PNGs (one or more)
     weight: float = 0.5
     width: int = 256
     height: int = 256
@@ -654,7 +685,7 @@ def ipadapter(req: IPAdapterRequest):
 @app.post("/ipadapter_faceid")
 def ipadapter_faceid(req: IPAdapterFaceIDRequest):
     _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
-    face_image = base64.b64decode(req.face_image_b64)
+    face_image = base64.b64decode(req.face_images_b64[0])
     resp = (
         _f()
         .ipadapter_faceid()

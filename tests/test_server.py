@@ -366,7 +366,7 @@ def test_ipadapter_faceid(client):
     c, factory = client
     factory.ipadapter_faceid.return_value.generate.return_value = _image()
     face_b64 = base64.b64encode(b"face_png").decode()
-    resp = c.post("/ipadapter_faceid", json={"prompt": "a portrait", "face_image_b64": face_b64})
+    resp = c.post("/ipadapter_faceid", json={"prompt": "a portrait", "face_images_b64": [face_b64]})
     assert resp.status_code == 200
     assert base64.b64decode(resp.json()["image_b64"]) == b"\x89PNG"
     factory.ipadapter_faceid.return_value.generate.assert_called_once_with(
@@ -389,7 +389,7 @@ def test_ipadapter_faceid_with_params(client):
         "/ipadapter_faceid",
         json={
             "prompt": "a portrait",
-            "face_image_b64": face_b64,
+            "face_images_b64": [face_b64],
             "weight": 0.9,
             "width": 64,
             "height": 64,
@@ -411,6 +411,39 @@ def test_ipadapter_faceid_with_params(client):
 
 
 # ── error paths ───────────────────────────────────────────────────────────────
+
+
+def test_timeout_returns_504(client):
+    import requests.exceptions
+    from fastapi.testclient import TestClient
+
+    from src.server import app
+
+    c, factory = client
+    factory.general.return_value.complete.side_effect = requests.exceptions.ReadTimeout(
+        "read timed out"
+    )
+    # raise_server_exceptions=False lets the exception handler return the response
+    with TestClient(app, raise_server_exceptions=False) as tc:
+        tc.app_state = c.app_state  # reuse existing factory state
+        resp = tc.post("/general", json={"messages": [{"role": "user", "content": "hi"}]})
+    assert resp.status_code == 504
+    assert "timeout" in resp.json()["detail"].lower()
+
+
+def test_unhandled_error_returns_502(client):
+    from fastapi.testclient import TestClient
+
+    from src.server import app
+
+    c, factory = client
+    factory.general.return_value.complete.side_effect = RuntimeError("something broke")
+    with TestClient(app, raise_server_exceptions=False) as tc:
+        tc.app_state = c.app_state
+        resp = tc.post("/general", json={"messages": [{"role": "user", "content": "hi"}]})
+    assert resp.status_code == 502
+    assert "something broke" in resp.json()["detail"]
+
 
 
 def test_config_not_found(tmp_path):
