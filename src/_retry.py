@@ -8,6 +8,28 @@ from typing import Callable
 from .responses import ImageResponse, TextResponse
 
 
+# Exception types that indicate a timeout — retrying is pointless.
+# We import lazily to avoid hard dependencies on requests/httpx/litellm.
+def _is_timeout(exc: BaseException) -> bool:
+    try:
+        import requests.exceptions
+
+        if isinstance(exc, (requests.exceptions.Timeout, requests.exceptions.ReadTimeout)):
+            return True
+    except ImportError:
+        pass
+    try:
+        import httpx
+
+        if isinstance(exc, (httpx.TimeoutException, httpx.ReadTimeout)):
+            return True
+    except ImportError:
+        pass
+    # litellm wraps timeouts — check the message as a fallback
+    msg = str(exc).lower()
+    return "timed out" in msg or "timeout" in msg or "read timeout" in msg
+
+
 def retry_text_completion(
     call_fn: Callable[[list[dict]], tuple[str, str]],
     messages: list[dict],
@@ -73,6 +95,8 @@ def retry_text_completion(
             )
 
         except Exception as exc:
+            if _is_timeout(exc):
+                raise
             err = str(exc)
             last_error = err
             if "Transfer-Encoding" in err and on_transfer_error is not None:
@@ -151,6 +175,8 @@ def retry_image_generation(
             )
 
         except Exception as exc:
+            if _is_timeout(exc):
+                raise
             err = str(exc)
             last_error = err
             if attempt == max_retries:

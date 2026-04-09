@@ -201,3 +201,58 @@ def test_retry_image_exception_exhaustion_raises():
 
     with pytest.raises(ValueError, match="failed after 2 attempts"):
         retry_image_generation(call_fn, 2, "m")
+
+
+# ---------------------------------------------------------------------------
+# timeout — should propagate immediately, not be retried
+# ---------------------------------------------------------------------------
+
+
+def test_retry_text_timeout_raises_immediately():
+    import requests.exceptions
+
+    from src._retry import retry_text_completion
+
+    calls = [0]
+
+    def call_fn(msgs):
+        calls[0] += 1
+        raise requests.exceptions.ReadTimeout("read timed out")
+
+    with pytest.raises(requests.exceptions.ReadTimeout):
+        retry_text_completion(call_fn, [{"role": "user", "content": "x"}], 3, "m")
+
+    assert calls[0] == 1  # must not retry
+
+
+def test_retry_image_timeout_raises_immediately():
+    import requests.exceptions
+
+    from src._retry import retry_image_generation
+
+    calls = [0]
+
+    def call_fn():
+        calls[0] += 1
+        raise requests.exceptions.Timeout("timed out")
+
+    with pytest.raises(requests.exceptions.Timeout):
+        retry_image_generation(call_fn, 3, "m")
+
+    assert calls[0] == 1  # must not retry
+
+
+def test_retry_text_non_timeout_is_still_retried():
+    from src._retry import retry_text_completion
+
+    calls = [0]
+
+    def call_fn(msgs):
+        calls[0] += 1
+        if calls[0] < 3:
+            raise RuntimeError("transient network error")
+        return "ok", "m"
+
+    result = retry_text_completion(call_fn, [{"role": "user", "content": "x"}], 3, "m")
+    assert result.content == "ok"
+    assert calls[0] == 3
