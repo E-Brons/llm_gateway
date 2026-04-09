@@ -13,9 +13,23 @@ import threading
 from typing import Any
 
 import torch
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 logger = logging.getLogger("diffusion_server")
+
+
+# ---------------------------------------------------------------------------
+# Public exception types
+# ---------------------------------------------------------------------------
+
+
+class PipelineLoadError(RuntimeError):
+    """Raised when a model pipeline fails to load (download, weight, OOM, …)."""
+
+
+class BadImageError(ValueError):
+    """Raised when the provided image bytes cannot be decoded."""
+
 
 # ---------------------------------------------------------------------------
 # Model registry
@@ -86,20 +100,29 @@ def _load_pipeline(model: str) -> Any:
     dev = _device()
     dt = _dtype(dev)
 
-    logger.info("Loading base model %s onto %s …", cfg["base"], dev)
-    pipe = StableDiffusionPipeline.from_pretrained(cfg["base"], torch_dtype=dt)
-    pipe = pipe.to(dev)
+    try:
+        logger.info("Loading base model %s onto %s …", cfg["base"], dev)
+        pipe = StableDiffusionPipeline.from_pretrained(cfg["base"], torch_dtype=dt)
+        pipe = pipe.to(dev)
+    except Exception as exc:
+        raise PipelineLoadError(f"Failed to load base model {cfg['base']!r}: {exc}") from exc
 
-    logger.info(
-        "Loading IP-Adapter weights %s/%s …",
-        cfg["adapter_repo"],
-        cfg["adapter_weight"],
-    )
-    pipe.load_ip_adapter(
-        cfg["adapter_repo"],
-        subfolder=cfg["adapter_subfolder"] or "",
-        weight_name=cfg["adapter_weight"],
-    )
+    try:
+        logger.info(
+            "Loading IP-Adapter weights %s/%s …",
+            cfg["adapter_repo"],
+            cfg["adapter_weight"],
+        )
+        pipe.load_ip_adapter(
+            cfg["adapter_repo"],
+            subfolder=cfg["adapter_subfolder"] or "",
+            weight_name=cfg["adapter_weight"],
+        )
+    except Exception as exc:
+        raise PipelineLoadError(
+            f"Failed to load adapter weights {cfg['adapter_weight']!r}: {exc}"
+        ) from exc
+
     logger.info("Pipeline ready: %s", model)
     return pipe
 
@@ -155,18 +178,24 @@ def generate_ipadapter(
     pipe = _get_pipeline(model)
     dev = _device()
 
-    ref_img = Image.open(io.BytesIO(reference_image)).convert("RGB")
-    pipe.set_ip_adapter_scale(weight)
+    try:
+        ref_img = Image.open(io.BytesIO(reference_image)).convert("RGB")
+    except (UnidentifiedImageError, Exception) as exc:
+        raise BadImageError(f"Cannot decode reference image: {exc}") from exc
 
+    pipe.set_ip_adapter_scale(weight)
     generator = torch.Generator(device=dev).manual_seed(seed) if seed is not None else None
-    images = pipe(
-        prompt=prompt,
-        ip_adapter_image=ref_img,
-        width=width,
-        height=height,
-        num_inference_steps=steps,
-        generator=generator,
-    ).images
+    try:
+        images = pipe(
+            prompt=prompt,
+            ip_adapter_image=ref_img,
+            width=width,
+            height=height,
+            num_inference_steps=steps,
+            generator=generator,
+        ).images
+    except Exception as exc:
+        raise RuntimeError(f"Image generation failed: {exc}") from exc
 
     buf = io.BytesIO()
     images[0].save(buf, format="PNG")
@@ -197,7 +226,11 @@ def generate_ipadapter_faceid(
     dev = _device()
 
     face_app = _get_face_app()
-    pil_img = Image.open(io.BytesIO(face_image)).convert("RGB")
+    try:
+        pil_img = Image.open(io.BytesIO(face_image)).convert("RGB")
+    except (UnidentifiedImageError, Exception) as exc:
+        raise BadImageError(f"Cannot decode face image: {exc}") from exc
+
     bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
     faces = face_app.get(bgr)
     if not faces:
@@ -209,14 +242,17 @@ def generate_ipadapter_faceid(
 
     pipe.set_ip_adapter_scale(weight)
     generator = torch.Generator(device=dev).manual_seed(seed) if seed is not None else None
-    images = pipe(
-        prompt=prompt,
-        ip_adapter_image_embeds=[faceid_embeds],
-        width=width,
-        height=height,
-        num_inference_steps=steps,
-        generator=generator,
-    ).images
+    try:
+        images = pipe(
+            prompt=prompt,
+            ip_adapter_image_embeds=[faceid_embeds],
+            width=width,
+            height=height,
+            num_inference_steps=steps,
+            generator=generator,
+        ).images
+    except Exception as exc:
+        raise RuntimeError(f"Image generation failed: {exc}") from exc
 
     buf = io.BytesIO()
     images[0].save(buf, format="PNG")
