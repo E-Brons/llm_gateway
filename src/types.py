@@ -173,7 +173,7 @@ class ImageInspectorLLM(ABC):
     def __init__(
         self,
         model: str,
-        timeout: int = 90,
+        timeout: int = 300,
         temperature: float | None = None,
         max_tokens: int | None = None,
         response_schema: dict | None = None,
