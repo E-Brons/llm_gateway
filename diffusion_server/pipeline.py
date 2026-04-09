@@ -58,6 +58,7 @@ _REGISTRY: dict[str, dict[str, Any]] = {
         "adapter_repo": "h94/IP-Adapter-FaceID",
         "adapter_subfolder": None,
         "adapter_weight": "ip-adapter-faceid-plus_sd15.bin",
+        "image_encoder_folder": None,
         "mode": "faceid",
     },
     "ip-adapter-faceid_sd15": {
@@ -65,6 +66,7 @@ _REGISTRY: dict[str, dict[str, Any]] = {
         "adapter_repo": "h94/IP-Adapter-FaceID",
         "adapter_subfolder": None,
         "adapter_weight": "ip-adapter-faceid_sd15.bin",
+        "image_encoder_folder": None,
         "mode": "faceid",
     },
 }
@@ -113,11 +115,13 @@ def _load_pipeline(model: str) -> Any:
             cfg["adapter_repo"],
             cfg["adapter_weight"],
         )
-        pipe.load_ip_adapter(
-            cfg["adapter_repo"],
-            subfolder=cfg["adapter_subfolder"] or "",
-            weight_name=cfg["adapter_weight"],
-        )
+        load_kwargs: dict = {
+            "subfolder": cfg["adapter_subfolder"] or "",
+            "weight_name": cfg["adapter_weight"],
+        }
+        if "image_encoder_folder" in cfg:
+            load_kwargs["image_encoder_folder"] = cfg["image_encoder_folder"]
+        pipe.load_ip_adapter(cfg["adapter_repo"], **load_kwargs)
     except Exception as exc:
         raise PipelineLoadError(
             f"Failed to load adapter weights {cfg['adapter_weight']!r}: {exc}"
