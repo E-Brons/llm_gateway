@@ -97,7 +97,7 @@ def _load_pipeline(model: str) -> Any:
     )
     pipe.load_ip_adapter(
         cfg["adapter_repo"],
-        subfolder=cfg["adapter_subfolder"],
+        subfolder=cfg["adapter_subfolder"] or "",
         weight_name=cfg["adapter_weight"],
     )
     logger.info("Pipeline ready: %s", model)
