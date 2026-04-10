@@ -289,37 +289,36 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="LLM Gateway", lifespan=lifespan)
 
 
-def _is_timeout_exc(exc: BaseException) -> bool:
+async def _handle_timeout(request: Request, exc: Exception) -> JSONResponse:
+    logger.warning("Timeout on %s: %s", request.url.path, exc)
+    return JSONResponse(status_code=504, content={"detail": f"Upstream timeout: {exc}"})
+
+
+async def _handle_error(request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Error on %s: %s", request.url.path, exc)
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+
+def _register_exception_handlers(application: FastAPI) -> None:
     try:
         import requests.exceptions
 
-        if isinstance(exc, (requests.exceptions.Timeout, requests.exceptions.ReadTimeout)):
-            return True
+        application.add_exception_handler(requests.exceptions.ReadTimeout, _handle_timeout)
+        application.add_exception_handler(requests.exceptions.Timeout, _handle_timeout)
+        application.add_exception_handler(requests.exceptions.ConnectionError, _handle_error)
     except ImportError:
         pass
     try:
         import httpx
 
-        if isinstance(exc, (httpx.TimeoutException, httpx.ReadTimeout)):
-            return True
+        application.add_exception_handler(httpx.ReadTimeout, _handle_timeout)
+        application.add_exception_handler(httpx.TimeoutException, _handle_timeout)
     except ImportError:
         pass
-    msg = str(exc).lower()
-    return "timed out" in msg or "read timeout" in msg
+    application.add_exception_handler(ValueError, _handle_error)
 
 
-@app.middleware("http")
-async def _exception_middleware(request: Request, call_next):
-    try:
-        return await call_next(request)
-    except Exception as exc:
-        if isinstance(exc, HTTPException):
-            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-        if _is_timeout_exc(exc):
-            logger.warning("Timeout on %s: %s", request.url.path, exc)
-            return JSONResponse(status_code=504, content={"detail": f"Upstream timeout: {exc}"})
-        logger.error("Error on %s: %s", request.url.path, exc)
-        return JSONResponse(status_code=502, content={"detail": str(exc)})
+_register_exception_handlers(app)
 
 
 def _f() -> LLMFactory:
