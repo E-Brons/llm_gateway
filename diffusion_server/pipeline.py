@@ -93,6 +93,7 @@ def _dtype(device: str) -> torch.dtype:
 _cache: dict[str, Any] = {}  # {"model": pipe}
 _face_app: Any = None  # insightface FaceAnalysis singleton
 _lock = threading.Lock()
+_infer_lock = threading.Lock()  # serialize inference — MPS is not thread-safe
 
 
 def _load_pipeline(model: str) -> Any:
@@ -126,6 +127,18 @@ def _load_pipeline(model: str) -> Any:
         raise PipelineLoadError(
             f"Failed to load adapter weights {cfg['adapter_weight']!r}: {exc}"
         ) from exc
+
+    # diffusers' prepare_ip_adapter_image_embeds accesses self.image_encoder.dtype
+    # even when using pre-computed embeds. Patch a dtype proxy when no encoder is loaded.
+    if getattr(pipe, "image_encoder", None) is None:
+        class _DtypeProxy:
+            def __init__(self, dtype: torch.dtype) -> None:
+                self.dtype = dtype
+        pipe.image_encoder = _DtypeProxy(dt)
+
+    # Disable safety checker — local inference server, no NSFW filtering needed.
+    # Without this, SD v1.5 returns black images for any face-conditioned output.
+    pipe.safety_checker = None
 
     logger.info("Pipeline ready: %s", model)
     return pipe
@@ -190,14 +203,15 @@ def generate_ipadapter(
     pipe.set_ip_adapter_scale(weight)
     generator = torch.Generator(device=dev).manual_seed(seed) if seed is not None else None
     try:
-        images = pipe(
-            prompt=prompt,
-            ip_adapter_image=ref_img,
-            width=width,
-            height=height,
-            num_inference_steps=steps,
-            generator=generator,
-        ).images
+        with _infer_lock:
+            images = pipe(
+                prompt=prompt,
+                ip_adapter_image=ref_img,
+                width=width,
+                height=height,
+                num_inference_steps=steps,
+                generator=generator,
+            ).images
     except Exception as exc:
         raise RuntimeError(f"Image generation failed: {exc}") from exc
 
@@ -241,20 +255,25 @@ def generate_ipadapter_faceid(
         raise ValueError("No face detected in the provided image")
 
     faceid_embeds = (
-        torch.from_numpy(faces[0].normed_embedding).unsqueeze(0).to(dev, dtype=_dtype(dev))
+        torch.from_numpy(faces[0].normed_embedding).unsqueeze(0).unsqueeze(1).to(dev, dtype=_dtype(dev))
     )
+    # For CFG: concatenate negative (zeros) and positive embeds along dim 0.
+    # diffusers requires 3D tensors in ip_adapter_image_embeds and calls .chunk(2) on each.
+    neg_embeds = torch.zeros_like(faceid_embeds)
+    faceid_embeds_cfg = torch.cat([neg_embeds, faceid_embeds], dim=0)  # [2, 1, 512]
 
     pipe.set_ip_adapter_scale(weight)
     generator = torch.Generator(device=dev).manual_seed(seed) if seed is not None else None
     try:
-        images = pipe(
-            prompt=prompt,
-            ip_adapter_image_embeds=[faceid_embeds],
-            width=width,
-            height=height,
-            num_inference_steps=steps,
-            generator=generator,
-        ).images
+        with _infer_lock:
+            images = pipe(
+                prompt=prompt,
+                ip_adapter_image_embeds=[faceid_embeds_cfg],
+                width=width,
+                height=height,
+                num_inference_steps=steps,
+                generator=generator,
+            ).images
     except Exception as exc:
         raise RuntimeError(f"Image generation failed: {exc}") from exc
 
