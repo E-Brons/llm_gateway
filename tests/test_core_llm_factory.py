@@ -211,3 +211,109 @@ def test_create_factory_convenience(tmp_path: Path):
         factory = create_factory(cfg_file)
 
     assert factory is not None
+
+
+def test_factory_build_passes_timeout():
+    from src.config import LLMConfig, LLMTypeConfig
+    from src.factory import LLMFactory
+
+    cfg = LLMConfig(
+        general=LLMTypeConfig(implementation="ollama", model="phi3", timeout=999),
+        text_gen=LLMTypeConfig(implementation="ollama", model="phi3"),
+        reasoning=LLMTypeConfig(implementation="ollama", model="phi3"),
+        image_gen=LLMTypeConfig(implementation="ollama", model="flux"),
+        image_inspector=LLMTypeConfig(implementation="ollama", model="llava"),
+        tools=LLMTypeConfig(implementation="ollama", model="phi3"),
+    )
+    factory = LLMFactory(cfg)
+    assert factory.general().timeout == 999
+
+
+def test_factory_build_passes_response_schema():
+    from src.config import LLMConfig, LLMTypeConfig
+    from src.factory import LLMFactory
+
+    schema = {"type": "object", "properties": {"result": {"type": "string"}}}
+    cfg = LLMConfig(
+        general=LLMTypeConfig(implementation="ollama", model="phi3", response_schema=schema),
+        text_gen=LLMTypeConfig(implementation="ollama", model="phi3"),
+        reasoning=LLMTypeConfig(implementation="ollama", model="phi3"),
+        image_gen=LLMTypeConfig(implementation="ollama", model="flux"),
+        image_inspector=LLMTypeConfig(implementation="ollama", model="llava"),
+        tools=LLMTypeConfig(implementation="ollama", model="phi3"),
+    )
+    factory = LLMFactory(cfg)
+    assert factory.general().response_schema == schema
+
+
+def test_factory_reasoning_returns_ollama():
+    from src.config import LLMConfig, LLMTypeConfig
+    from src.factory import LLMFactory
+    from src.impl.impl_ollama import OllamaReasoningLLM
+
+    cfg = LLMConfig(
+        general=LLMTypeConfig(implementation="ollama", model="phi3"),
+        text_gen=LLMTypeConfig(implementation="ollama", model="phi3"),
+        reasoning=LLMTypeConfig(implementation="ollama", model="phi3"),
+        image_gen=LLMTypeConfig(implementation="ollama", model="flux"),
+        image_inspector=LLMTypeConfig(implementation="ollama", model="llava"),
+        tools=LLMTypeConfig(implementation="ollama", model="phi3"),
+    )
+    factory = LLMFactory(cfg)
+    assert isinstance(factory.reasoning(), OllamaReasoningLLM)
+
+
+def test_factory_image_gen_returns_ollama():
+    from src.config import LLMConfig, LLMTypeConfig
+    from src.factory import LLMFactory
+    from src.impl.impl_ollama import OllamaImageGenLLM
+
+    cfg = LLMConfig(
+        general=LLMTypeConfig(implementation="ollama", model="phi3"),
+        text_gen=LLMTypeConfig(implementation="ollama", model="phi3"),
+        reasoning=LLMTypeConfig(implementation="ollama", model="phi3"),
+        image_gen=LLMTypeConfig(implementation="ollama", model="flux"),
+        image_inspector=LLMTypeConfig(implementation="ollama", model="llava"),
+        tools=LLMTypeConfig(implementation="ollama", model="phi3"),
+    )
+    factory = LLMFactory(cfg)
+    assert isinstance(factory.image_gen(), OllamaImageGenLLM)
+
+
+def test_factory_image_inspector_returns_ollama():
+    from src.config import LLMConfig, LLMTypeConfig
+    from src.factory import LLMFactory
+    from src.impl.impl_ollama import OllamaImageInspectorLLM
+
+    cfg = LLMConfig(
+        general=LLMTypeConfig(implementation="ollama", model="phi3"),
+        text_gen=LLMTypeConfig(implementation="ollama", model="phi3"),
+        reasoning=LLMTypeConfig(implementation="ollama", model="phi3"),
+        image_gen=LLMTypeConfig(implementation="ollama", model="flux"),
+        image_inspector=LLMTypeConfig(implementation="ollama", model="llava"),
+        tools=LLMTypeConfig(implementation="ollama", model="phi3"),
+    )
+    factory = LLMFactory(cfg)
+    assert isinstance(factory.image_inspector(), OllamaImageInspectorLLM)
+
+
+def test_factory_build_passes_litellm_api_base():
+    from src.config import LLMConfig, LLMTypeConfig
+    from src.factory import LLMFactory
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        cfg = LLMConfig(
+            general=LLMTypeConfig(
+                implementation="litellm",
+                model="gpt-4o",
+                api_base="http://custom:8080",
+            ),
+            text_gen=LLMTypeConfig(implementation="ollama", model="phi3"),
+            reasoning=LLMTypeConfig(implementation="ollama", model="phi3"),
+            image_gen=LLMTypeConfig(implementation="ollama", model="flux"),
+            image_inspector=LLMTypeConfig(implementation="ollama", model="llava"),
+            tools=LLMTypeConfig(implementation="ollama", model="phi3"),
+        )
+        factory = LLMFactory(cfg)
+        obj = factory.general()
+    assert obj.api_base == "http://custom:8080"

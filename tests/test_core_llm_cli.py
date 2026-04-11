@@ -169,3 +169,127 @@ def test_cli_image_inspector_embeds_image_in_stream_json():
 
     stdin = mock_run.call_args[1].get("input", "")
     assert base64.b64encode(raw).decode("ascii") in stdin
+
+
+# ---------------------------------------------------------------------------
+# _inject_schema
+# ---------------------------------------------------------------------------
+
+
+def test_inject_schema_creates_system_message_when_none_present():
+    from src.impl.impl_cli import _inject_schema
+
+    msgs = [{"role": "user", "content": "hello"}]
+    schema = {"type": "object", "properties": {"answer": {"type": "string"}}}
+    result = _inject_schema(msgs, schema)
+
+    assert result[0]["role"] == "system"
+    assert "answer" in result[0]["content"]
+    assert result[1] == msgs[0]
+
+
+def test_inject_schema_merges_into_existing_system_message():
+    from src.impl.impl_cli import _inject_schema
+
+    msgs = [
+        {"role": "system", "content": "Be helpful."},
+        {"role": "user", "content": "hello"},
+    ]
+    schema = {"type": "object"}
+    result = _inject_schema(msgs, schema)
+
+    assert result[0]["role"] == "system"
+    assert "Be helpful." in result[0]["content"]
+    assert len(result) == 2
+
+
+# ---------------------------------------------------------------------------
+# _run_claude error paths
+# ---------------------------------------------------------------------------
+
+
+def test_run_claude_nonzero_exit_raises():
+    from src.impl.impl_cli import _run_claude
+
+    proc = MagicMock()
+    proc.returncode = 1
+    proc.stdout = ""
+    proc.stderr = "auth error"
+
+    with patch("src.impl.impl_cli.subprocess.run", return_value=proc):
+        with pytest.raises(subprocess.CalledProcessError):
+            _run_claude("hello")
+
+
+def test_run_claude_stream_json_nonzero_exit_raises():
+    from src.impl.impl_cli import _run_claude_stream_json
+
+    proc = MagicMock()
+    proc.returncode = 2
+    proc.stdout = ""
+    proc.stderr = "fatal error"
+
+    with patch("src.impl.impl_cli.subprocess.run", return_value=proc):
+        with pytest.raises(subprocess.CalledProcessError):
+            _run_claude_stream_json([{"role": "user", "content": "hi"}])
+
+
+# ---------------------------------------------------------------------------
+# _run_claude_stream_json system+content merging
+# ---------------------------------------------------------------------------
+
+
+def test_run_claude_stream_json_list_content_merged_with_system():
+    """When the first user message has list content, the system text is prepended as a text block."""
+    from src.impl.impl_cli import _run_claude_stream_json
+
+    messages = [
+        {"role": "system", "content": "Be precise."},
+        {"role": "user", "content": [{"type": "text", "text": "describe"}]},
+    ]
+
+    with patch(
+        "src.impl.impl_cli.subprocess.run",
+        return_value=_mock_proc(_ndjson_result("ok")),
+    ) as mock_run:
+        result, _ = _run_claude_stream_json(messages)
+
+    stdin_data = mock_run.call_args[1]["input"]
+    assert "Be precise." in stdin_data
+    assert result == "ok"
+
+
+def test_run_claude_stream_json_string_content_merged_with_system():
+    """When the first user message has string content, the system text is prepended."""
+    from src.impl.impl_cli import _run_claude_stream_json
+
+    messages = [
+        {"role": "system", "content": "Be precise."},
+        {"role": "user", "content": "describe the image"},
+    ]
+
+    with patch(
+        "src.impl.impl_cli.subprocess.run",
+        return_value=_mock_proc(_ndjson_result("merged")),
+    ) as mock_run:
+        result, _ = _run_claude_stream_json(messages)
+
+    stdin_data = mock_run.call_args[1]["input"]
+    assert "Be precise." in stdin_data
+    assert "describe the image" in stdin_data
+    assert result == "merged"
+
+
+def test_run_claude_stream_json_skips_empty_lines_and_invalid_json():
+    """Empty lines and non-JSON lines in stdout are silently skipped."""
+    from src.impl.impl_cli import _run_claude_stream_json
+
+    output = "\n\nnot-json-at-all\n{}\n" + '{"type": "result", "result": "final"}'
+
+    with patch(
+        "src.impl.impl_cli.subprocess.run",
+        return_value=_mock_proc(output),
+    ):
+        result, _ = _run_claude_stream_json([{"role": "user", "content": "hi"}])
+
+    assert result == "final"
