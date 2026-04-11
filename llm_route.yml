@@ -39,5 +39,5 @@ ipadapter:
 
 ipadapter_faceid:
   implementation: diffusion_server
-  model: ip-adapter-faceid-plus_sd15
+  model: ip-adapter-faceid_sd15
   api_base: http://localhost:7860

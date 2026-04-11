@@ -76,6 +76,17 @@ if [ "$WITH_DIFFUSION" -eq 1 ]; then
     echo "  Models are cached in ~/.cache/huggingface — re-running is safe."
     echo ""
 
+    HF_TOKEN_FILE="$ROOT/local/hf_token"
+    if [ -f "$HF_TOKEN_FILE" ]; then
+      export HF_TOKEN
+      HF_TOKEN=$(cat "$HF_TOKEN_FILE")
+      echo "  Using HuggingFace token from local/hf_token."
+    else
+      echo -e "\033[0;31m  WARNING: local/hf_token not found — downloads will be unauthenticated (slow).\033[0m"
+      echo -e "\033[0;31m  Create local/hf_token with a read token from https://huggingface.co/settings/tokens\033[0m"
+    fi
+    echo ""
+
     "$VENV/bin/python" - <<'PYEOF'
 from huggingface_hub import hf_hub_download, snapshot_download
 

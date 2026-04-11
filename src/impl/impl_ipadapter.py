@@ -92,7 +92,14 @@ class DiffusionServerIPAdapterLLM(ImageGenLLM):
                 payload["steps"] = num_inference_steps
 
             resp = requests.post(f"{self.api_base}/ipadapter", json=payload, timeout=self.timeout)
-            resp.raise_for_status()
+            if not resp.ok:
+                try:
+                    detail = resp.json().get("detail", resp.text)
+                except Exception:
+                    detail = resp.text
+                raise requests.exceptions.HTTPError(
+                    f"{resp.status_code} {resp.reason}: {detail}", response=resp
+                )
             data = resp.json()
             img_b64 = data.get("image")
             if not img_b64:
@@ -158,7 +165,14 @@ class DiffusionServerIPAdapterFaceIDLLM(ImageGenLLM):
             resp = requests.post(
                 f"{self.api_base}/ipadapter_faceid", json=payload, timeout=self.timeout
             )
-            resp.raise_for_status()
+            if not resp.ok:
+                try:
+                    detail = resp.json().get("detail", resp.text)
+                except Exception:
+                    detail = resp.text
+                raise requests.exceptions.HTTPError(
+                    f"{resp.status_code} {resp.reason}: {detail}", response=resp
+                )
             data = resp.json()
             img_b64 = data.get("image")
             if not img_b64:

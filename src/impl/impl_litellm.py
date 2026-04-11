@@ -228,7 +228,7 @@ class LiteLLMImageInspectorLLM(ImageInspectorLLM):
     def __init__(
         self,
         model: str,
-        timeout: int = 90,
+        timeout: int = 300,
         api_base: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,

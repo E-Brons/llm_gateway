@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import subprocess
 import time
 import uuid
@@ -24,7 +25,9 @@ from ..types import (
 
 logger = logging.getLogger(__name__)
 
-_CLI_CMD = "claude"
+# Allow overriding the claude binary path via env var — useful when the gateway
+# is started from a context where nvm/node bins are not on PATH.
+_CLI_CMD = os.environ.get("CLAUDE_CLI_PATH", "claude")
 
 
 def _schema_instruction(schema: dict) -> str:
@@ -76,6 +79,7 @@ def _run_claude_stream_json(
         "stream-json",
         "--input-format",
         "stream-json",
+        "--verbose",
     ]
     if effort:
         cmd += ["--effort", effort]

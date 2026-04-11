@@ -30,6 +30,7 @@ diffusion = [
     "safetensors>=0.4.0",
     "Pillow>=10.0.0",
     "huggingface_hub>=0.23.0",
+    "peft>=0.12.0",
     "insightface>=0.7.3",
     "onnxruntime>=1.18.0",
     "opencv-python-headless>=4.9.0",

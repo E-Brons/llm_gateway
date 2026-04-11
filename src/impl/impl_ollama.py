@@ -334,7 +334,7 @@ class OllamaImageInspectorLLM(ImageInspectorLLM):
     def __init__(
         self,
         model: str,
-        timeout: int = 90,
+        timeout: int = 300,
         ollama_url: str = "http://localhost:11434",
         temperature: float | None = None,
         max_tokens: int | None = None,

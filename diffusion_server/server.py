@@ -15,9 +15,13 @@ from __future__ import annotations
 import base64
 import logging
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pipeline import (
     _REGISTRY,
+    BadImageError,
+    NoFaceDetectedError,
+    PipelineLoadError,
     generate_ipadapter,
     generate_ipadapter_faceid,
 )
@@ -27,6 +31,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
 logger = logging.getLogger("diffusion_server")
 
 app = FastAPI(title="Diffusion Server — IP-Adapter")
+
+
+@app.middleware("http")
+async def _exception_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        logger.error("Error on %s: %s", request.url.path, exc)
+        return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
 # ── Request models ──────────────────────────────────────────────────────────
@@ -89,9 +104,11 @@ def ipadapter(req: IPAdapterRequest):
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    except Exception as exc:
-        logger.exception("ipadapter generation failed")
-        raise HTTPException(500, str(exc)) from exc
+    except BadImageError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    except PipelineLoadError as exc:
+        logger.error("Pipeline load failed: %s", exc)
+        raise HTTPException(503, str(exc)) from exc
 
     return {
         "image": base64.b64encode(img_bytes).decode(),
@@ -115,9 +132,13 @@ def ipadapter_faceid(req: IPAdapterFaceIDRequest):
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    except Exception as exc:
-        logger.exception("ipadapter_faceid generation failed")
-        raise HTTPException(500, str(exc)) from exc
+    except NoFaceDetectedError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    except BadImageError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    except PipelineLoadError as exc:
+        logger.error("Pipeline load failed: %s", exc)
+        raise HTTPException(503, str(exc)) from exc
 
     return {
         "image": base64.b64encode(img_bytes).decode(),
