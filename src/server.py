@@ -300,6 +300,20 @@ async def _handle_error(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
+async def _handle_http_error(request: Request, exc: Exception) -> JSONResponse:
+    import requests.exceptions
+
+    assert isinstance(exc, requests.exceptions.HTTPError)
+    resp = exc.response
+    status = resp.status_code if resp is not None else 502
+    detail = str(exc)
+    if status < 500:
+        logger.warning("Upstream 4xx on %s: %s", request.url.path, detail)
+        return JSONResponse(status_code=422, content={"detail": detail})
+    logger.error("Upstream 5xx on %s: %s", request.url.path, detail)
+    return JSONResponse(status_code=502, content={"detail": detail})
+
+
 def _register_exception_handlers(application: FastAPI) -> None:
     try:
         import requests.exceptions
@@ -307,6 +321,7 @@ def _register_exception_handlers(application: FastAPI) -> None:
         application.add_exception_handler(requests.exceptions.ReadTimeout, _handle_timeout)
         application.add_exception_handler(requests.exceptions.Timeout, _handle_timeout)
         application.add_exception_handler(requests.exceptions.ConnectionError, _handle_error)
+        application.add_exception_handler(requests.exceptions.HTTPError, _handle_http_error)
     except ImportError:
         pass
     try:
