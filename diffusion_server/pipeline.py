@@ -31,6 +31,10 @@ class BadImageError(ValueError):
     """Raised when the provided image bytes cannot be decoded."""
 
 
+class NoFaceDetectedError(ValueError):
+    """Raised when no face is found in the provided image."""
+
+
 # ---------------------------------------------------------------------------
 # Model registry
 #
@@ -252,7 +256,7 @@ def generate_ipadapter_faceid(
     bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
     faces = face_app.get(bgr)
     if not faces:
-        raise ValueError("No face detected in the provided image")
+        raise NoFaceDetectedError("No face detected in the provided image")
 
     faceid_embeds = (
         torch.from_numpy(faces[0].normed_embedding).unsqueeze(0).unsqueeze(1).to(dev, dtype=_dtype(dev))

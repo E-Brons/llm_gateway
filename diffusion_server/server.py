@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from pipeline import (
     _REGISTRY,
     BadImageError,
+    NoFaceDetectedError,
     PipelineLoadError,
     generate_ipadapter,
     generate_ipadapter_faceid,
@@ -104,7 +105,7 @@ def ipadapter(req: IPAdapterRequest):
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except BadImageError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise HTTPException(422, detail=str(exc)) from exc
     except PipelineLoadError as exc:
         logger.error("Pipeline load failed: %s", exc)
         raise HTTPException(503, str(exc)) from exc
@@ -131,8 +132,10 @@ def ipadapter_faceid(req: IPAdapterFaceIDRequest):
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except NoFaceDetectedError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
     except BadImageError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise HTTPException(422, detail=str(exc)) from exc
     except PipelineLoadError as exc:
         logger.error("Pipeline load failed: %s", exc)
         raise HTTPException(503, str(exc)) from exc
