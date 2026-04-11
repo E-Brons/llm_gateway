@@ -15,7 +15,7 @@ wraps a local diffusion pipeline.  The server is expected to expose two endpoint
                 "cfg_scale", "lora", "lora_weight"}
     Response : {"image" (b64), "model"}
 
-Pass the reference/face image via ``reference_images=[img_bytes]``.
+Pass the reference/face image as the second positional argument.
 Pass the adapter conditioning strength via the ``ip_adapter_scale`` parameter (default 0.5).
 """
 
@@ -28,7 +28,7 @@ import requests
 
 from .._retry import retry_image_generation
 from ..responses import ImageResponse
-from ..types import ImageGenLLM
+from ..types import IPAdapterFaceIDLLM, IPAdapterLLM
 
 _DEFAULT_API_BASE = "http://localhost:7860"
 
@@ -40,7 +40,7 @@ def _bare_model(model: str) -> str:
     return model
 
 
-class DiffusionServerIPAdapterLLM(ImageGenLLM):
+class DiffusionServerIPAdapterLLM(IPAdapterLLM):
     """IP-Adapter image generation via a local diffusion REST server."""
 
     def __init__(
@@ -64,11 +64,11 @@ class DiffusionServerIPAdapterLLM(ImageGenLLM):
     def generate(
         self,
         prompt: str,
+        reference_image: bytes,
         *,
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
-        reference_images: list[bytes] | None = None,
-        ip_adapter_scale: float | None = None,
+        ip_adapter_scale: float = 0.5,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
@@ -79,9 +79,7 @@ class DiffusionServerIPAdapterLLM(ImageGenLLM):
         lora_weight: float = 1.0,
         options: dict | None = None,
     ) -> ImageResponse:
-        reference_image = (reference_images or [b""])[0]
         ref_b64 = base64.b64encode(reference_image).decode("ascii")
-        effective_scale = ip_adapter_scale if ip_adapter_scale is not None else 0.5
 
         def call_fn() -> tuple[bytes, str]:
             payload: dict = {
@@ -90,7 +88,7 @@ class DiffusionServerIPAdapterLLM(ImageGenLLM):
                 "reference_image": ref_b64,
                 "width": width,
                 "height": height,
-                "ip_adapter_scale": effective_scale,
+                "ip_adapter_scale": ip_adapter_scale,
             }
             if seed is not None:
                 payload["seed"] = seed
@@ -122,7 +120,7 @@ class DiffusionServerIPAdapterLLM(ImageGenLLM):
         return retry_image_generation(call_fn, max_retries, self.model, validator=validator)
 
 
-class DiffusionServerIPAdapterFaceIDLLM(ImageGenLLM):
+class DiffusionServerIPAdapterFaceIDLLM(IPAdapterFaceIDLLM):
     """IP-Adapter FaceID image generation via a local diffusion REST server."""
 
     def __init__(
@@ -146,11 +144,11 @@ class DiffusionServerIPAdapterFaceIDLLM(ImageGenLLM):
     def generate(
         self,
         prompt: str,
+        face_image: bytes,
         *,
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
-        reference_images: list[bytes] | None = None,
-        ip_adapter_scale: float | None = None,
+        ip_adapter_scale: float = 0.5,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
@@ -161,9 +159,7 @@ class DiffusionServerIPAdapterFaceIDLLM(ImageGenLLM):
         lora_weight: float = 1.0,
         options: dict | None = None,
     ) -> ImageResponse:
-        face_image = (reference_images or [b""])[0]
         face_b64 = base64.b64encode(face_image).decode("ascii")
-        effective_scale = ip_adapter_scale if ip_adapter_scale is not None else 0.5
 
         def call_fn() -> tuple[bytes, str]:
             payload: dict = {
@@ -172,7 +168,7 @@ class DiffusionServerIPAdapterFaceIDLLM(ImageGenLLM):
                 "face_image": face_b64,
                 "width": width,
                 "height": height,
-                "ip_adapter_scale": effective_scale,
+                "ip_adapter_scale": ip_adapter_scale,
             }
             if seed is not None:
                 payload["seed"] = seed

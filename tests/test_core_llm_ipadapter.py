@@ -38,7 +38,7 @@ def test_ipadapter_happy_path():
         return_value=_mock_image_response(b64),
     ):
         llm = DiffusionServerIPAdapterLLM(model="ip-adapter_sd15", api_base=_API_BASE)
-        result = llm.generate("a cat", reference_images=[b"ref_image"], max_retries=1)
+        result = llm.generate("a cat", b"ref_image", max_retries=1)
 
     assert result.image == raw
     assert result.attempts == 1
@@ -54,7 +54,7 @@ def test_ipadapter_posts_to_correct_endpoint():
         return_value=_mock_image_response(b64),
     ) as mock_post:
         llm = DiffusionServerIPAdapterLLM(model="ip-adapter_sd15", api_base=_API_BASE)
-        llm.generate("a cat", reference_images=[b"ref_image"], max_retries=1)
+        llm.generate("a cat", b"ref_image", max_retries=1)
 
     assert mock_post.call_args[0][0] == f"{_API_BASE}/ipadapter"
 
@@ -71,7 +71,7 @@ def test_ipadapter_sends_reference_image_b64():
         return_value=_mock_image_response(b64_result),
     ) as mock_post:
         llm = DiffusionServerIPAdapterLLM(model="ip-adapter_sd15", api_base=_API_BASE)
-        llm.generate("a cat", reference_images=[ref_bytes], max_retries=1)
+        llm.generate("a cat", ref_bytes, max_retries=1)
 
     payload = mock_post.call_args[1]["json"]
     assert payload["reference_image"] == expected_b64
@@ -89,7 +89,7 @@ def test_ipadapter_sends_all_generation_params():
         llm = DiffusionServerIPAdapterLLM(model="ip-adapter_sd15", api_base=_API_BASE)
         llm.generate(
             "a cat",
-            reference_images=[b"ref"],
+            b"ref",
             max_retries=1,
             ip_adapter_scale=0.8,
             width=512,
@@ -125,7 +125,7 @@ def test_ipadapter_strips_model_prefix():
         return_value=_mock_image_response(b64),
     ) as mock_post:
         llm = DiffusionServerIPAdapterLLM(model="diffusion/ip-adapter_sd15", api_base=_API_BASE)
-        llm.generate("x", reference_images=[b"ref"], max_retries=1)
+        llm.generate("x", b"ref", max_retries=1)
 
     assert mock_post.call_args[1]["json"]["model"] == "ip-adapter_sd15"
 
@@ -140,7 +140,7 @@ def test_ipadapter_no_seed_omits_key():
         return_value=_mock_image_response(b64),
     ) as mock_post:
         llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
-        llm.generate("x", reference_images=[b"ref"], max_retries=1)
+        llm.generate("x", b"ref", max_retries=1)
 
     assert "seed" not in mock_post.call_args[1]["json"]
 
@@ -155,7 +155,7 @@ def test_ipadapter_default_weight():
         return_value=_mock_image_response(b64),
     ) as mock_post:
         llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
-        llm.generate("x", reference_images=[b"ref"], max_retries=1)
+        llm.generate("x", b"ref", max_retries=1)
 
     assert mock_post.call_args[1]["json"]["ip_adapter_scale"] == 0.5
 
@@ -169,7 +169,7 @@ def test_ipadapter_empty_response_retries_then_raises():
     ):
         llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
         with pytest.raises(ValueError):
-            llm.generate("x", reference_images=[b"ref"], max_retries=2)
+            llm.generate("x", b"ref", max_retries=2)
 
 
 def test_ipadapter_validator_triggers_retry():
@@ -183,7 +183,7 @@ def test_ipadapter_validator_triggers_retry():
         llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
         result = llm.generate(
             "x",
-            reference_images=[b"ref"],
+            b"ref",
             max_retries=2,
             validator=lambda img: img == b"good_image",
         )
@@ -212,7 +212,7 @@ def test_ipadapter_optional_params_omitted_when_none():
         return_value=_mock_image_response(b64),
     ) as mock_post:
         llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
-        llm.generate("x", reference_images=[b"ref"], max_retries=1)
+        llm.generate("x", b"ref", max_retries=1)
 
     payload = mock_post.call_args[1]["json"]
     assert "negative_prompt" not in payload
@@ -230,7 +230,7 @@ def test_ipadapter_cfg_scale_default_omitted():
         return_value=_mock_image_response(b64),
     ) as mock_post:
         llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
-        llm.generate("x", reference_images=[b"ref"], max_retries=1)
+        llm.generate("x", b"ref", max_retries=1)
 
     assert "cfg_scale" not in mock_post.call_args[1]["json"]
 
@@ -245,7 +245,7 @@ def test_ipadapter_cfg_scale_forwarded_when_set():
         return_value=_mock_image_response(b64),
     ) as mock_post:
         llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
-        llm.generate("x", reference_images=[b"ref"], max_retries=1, cfg_scale=12.0)
+        llm.generate("x", b"ref", max_retries=1, cfg_scale=12.0)
 
     assert mock_post.call_args[1]["json"]["cfg_scale"] == 12.0
 
@@ -266,7 +266,7 @@ def test_ipadapter_faceid_happy_path():
         return_value=_mock_image_response(b64),
     ):
         llm = DiffusionServerIPAdapterFaceIDLLM(model="ip-faceid", api_base=_API_BASE)
-        result = llm.generate("a portrait", reference_images=[b"face_image"], max_retries=1)
+        result = llm.generate("a portrait", b"face_image", max_retries=1)
 
     assert result.image == raw
     assert result.attempts == 1
@@ -282,7 +282,7 @@ def test_ipadapter_faceid_posts_to_correct_endpoint():
         return_value=_mock_image_response(b64),
     ) as mock_post:
         llm = DiffusionServerIPAdapterFaceIDLLM(model="ip-faceid", api_base=_API_BASE)
-        llm.generate("a portrait", reference_images=[b"face_image"], max_retries=1)
+        llm.generate("a portrait", b"face_image", max_retries=1)
 
     assert mock_post.call_args[0][0] == f"{_API_BASE}/ipadapter_faceid"
 
@@ -299,7 +299,7 @@ def test_ipadapter_faceid_sends_face_image_b64():
         return_value=_mock_image_response(b64_result),
     ) as mock_post:
         llm = DiffusionServerIPAdapterFaceIDLLM(model="ip-faceid", api_base=_API_BASE)
-        llm.generate("a portrait", reference_images=[face_bytes], max_retries=1)
+        llm.generate("a portrait", face_bytes, max_retries=1)
 
     payload = mock_post.call_args[1]["json"]
     assert payload["face_image"] == expected_b64
@@ -317,7 +317,7 @@ def test_ipadapter_faceid_sends_all_generation_params():
         llm = DiffusionServerIPAdapterFaceIDLLM(model="ip-faceid", api_base=_API_BASE)
         llm.generate(
             "a portrait",
-            reference_images=[b"face"],
+            b"face",
             max_retries=1,
             ip_adapter_scale=0.75,
             width=512,
@@ -352,7 +352,7 @@ def test_ipadapter_faceid_empty_response_retries_then_raises():
     ):
         llm = DiffusionServerIPAdapterFaceIDLLM(model="m", api_base=_API_BASE)
         with pytest.raises(ValueError):
-            llm.generate("x", reference_images=[b"face"], max_retries=2)
+            llm.generate("x", b"face", max_retries=2)
 
 
 def test_ipadapter_faceid_default_api_base():
@@ -375,7 +375,7 @@ def test_ipadapter_faceid_optional_params_omitted_when_none():
         return_value=_mock_image_response(b64),
     ) as mock_post:
         llm = DiffusionServerIPAdapterFaceIDLLM(model="m", api_base=_API_BASE)
-        llm.generate("x", reference_images=[b"face"], max_retries=1)
+        llm.generate("x", b"face", max_retries=1)
 
     payload = mock_post.call_args[1]["json"]
     assert "negative_prompt" not in payload
@@ -393,7 +393,7 @@ def test_ipadapter_faceid_default_ip_adapter_scale():
         return_value=_mock_image_response(b64),
     ) as mock_post:
         llm = DiffusionServerIPAdapterFaceIDLLM(model="m", api_base=_API_BASE)
-        llm.generate("x", reference_images=[b"face"], max_retries=1)
+        llm.generate("x", b"face", max_retries=1)
 
     assert mock_post.call_args[1]["json"]["ip_adapter_scale"] == 0.5
 
@@ -410,7 +410,7 @@ def test_ipadapter_faceid_lora_forwarded():
         llm = DiffusionServerIPAdapterFaceIDLLM(model="m", api_base=_API_BASE)
         llm.generate(
             "x",
-            reference_images=[b"face"],
+            b"face",
             max_retries=1,
             lora="civitai/my-lora",
             lora_weight=0.6,
@@ -432,7 +432,7 @@ def test_factory_ipadapter_returns_image_gen_llm(tmp_path):
     from src.config import load_llm_config
     from src.factory import LLMFactory
     from src.impl.impl_ipadapter import DiffusionServerIPAdapterLLM
-    from src.types import ImageGenLLM
+    from src.types import IPAdapterLLM
 
     yaml = textwrap.dedent("""\
         general:
@@ -469,7 +469,7 @@ def test_factory_ipadapter_returns_image_gen_llm(tmp_path):
     cfg = load_llm_config(cfg_file)
     factory = LLMFactory(cfg)
     obj = factory.ipadapter()
-    assert isinstance(obj, ImageGenLLM)
+    assert isinstance(obj, IPAdapterLLM)
     assert isinstance(obj, DiffusionServerIPAdapterLLM)
     assert obj.api_base == "http://localhost:7860"
 
@@ -480,7 +480,7 @@ def test_factory_ipadapter_faceid_returns_image_gen_llm(tmp_path):
     from src.config import load_llm_config
     from src.factory import LLMFactory
     from src.impl.impl_ipadapter import DiffusionServerIPAdapterFaceIDLLM
-    from src.types import ImageGenLLM
+    from src.types import IPAdapterFaceIDLLM
 
     yaml = textwrap.dedent("""\
         general:
@@ -517,7 +517,7 @@ def test_factory_ipadapter_faceid_returns_image_gen_llm(tmp_path):
     cfg = load_llm_config(cfg_file)
     factory = LLMFactory(cfg)
     obj = factory.ipadapter_faceid()
-    assert isinstance(obj, ImageGenLLM)
+    assert isinstance(obj, IPAdapterFaceIDLLM)
     assert isinstance(obj, DiffusionServerIPAdapterFaceIDLLM)
 
 
