@@ -424,3 +424,101 @@ def test_ollama_image_gen_size_and_steps_integration(ollama_image_model, ollama_
     assert timings["fast"] < timings["quality"], (
         f"fast ({timings['fast']:.2f}s) should be faster than quality ({timings['quality']:.2f}s)"
     )
+
+
+# ---------------------------------------------------------------------------
+# _ollama_generate options (width, height, seed) and response_schema
+# ---------------------------------------------------------------------------
+
+
+def test_ollama_generate_sets_width_height_seed_in_options():
+    """_ollama_generate passes width, height, and seed into the options payload."""
+    from src.impl.impl_ollama import _ollama_generate
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {"response": "desc", "model": "llava"}
+
+    with patch("src.impl.impl_ollama.requests.post", return_value=mock_resp) as mock_post:
+        _ollama_generate(
+            _OLLAMA_URL,
+            "llava",
+            "describe",
+            timeout=30,
+            width=128,
+            height=64,
+            seed=77,
+        )
+
+    payload = mock_post.call_args[1]["json"]
+    assert payload["options"]["width"] == 128
+    assert payload["options"]["height"] == 64
+    assert payload["options"]["seed"] == 77
+
+
+def test_ollama_generate_response_schema_sets_format():
+    """_ollama_generate adds the schema as the 'format' key when response_schema is given."""
+    from src.impl.impl_ollama import OllamaImageInspectorLLM
+
+    schema = {"type": "object", "properties": {"label": {"type": "string"}}}
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {"response": "a label", "model": "llava"}
+
+    with patch(
+        "src.impl.impl_ollama.requests.post", return_value=mock_resp
+    ) as mock_post:
+        llm = OllamaImageInspectorLLM(model="llava", ollama_url=_OLLAMA_URL)
+        llm.inspect(b"imgdata", "sys", "describe", response_schema=schema)
+
+    payload = mock_post.call_args[1]["json"]
+    assert payload["format"] == schema
+
+
+# ---------------------------------------------------------------------------
+# OllamaImageGenLLM — reference images and 'image' fallback key
+# ---------------------------------------------------------------------------
+
+
+def test_ollama_image_gen_sends_reference_images():
+    """OllamaImageGenLLM base64-encodes reference_images into the payload."""
+    import base64
+
+    from src.impl.impl_ollama import OllamaImageGenLLM
+
+    ref_bytes = b"reference image data"
+    expected_b64 = base64.b64encode(ref_bytes).decode("ascii")
+    img_b64 = base64.b64encode(b"result").decode()
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json.return_value = {"images": [img_b64], "model": "flux"}
+
+    with patch("src.impl.impl_ollama.requests.post", return_value=mock_resp) as mock_post:
+        llm = OllamaImageGenLLM(model="flux", ollama_url=_OLLAMA_URL)
+        llm.generate("a cat", max_retries=1, reference_images=[ref_bytes])
+
+    payload = mock_post.call_args[1]["json"]
+    assert payload["images"] == [expected_b64]
+
+
+def test_ollama_image_gen_fallback_to_image_key():
+    """If 'images' is absent, OllamaImageGenLLM falls back to the 'image' key."""
+    import base64
+
+    from src.impl.impl_ollama import OllamaImageGenLLM
+
+    raw = b"\x89PNG\r\n"
+    b64 = base64.b64encode(raw).decode()
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    # Return 'image' (singular) instead of 'images' (list)
+    mock_resp.json.return_value = {"image": b64, "model": "flux"}
+
+    with patch("src.impl.impl_ollama.requests.post", return_value=mock_resp):
+        llm = OllamaImageGenLLM(model="flux", ollama_url=_OLLAMA_URL)
+        result = llm.generate("a cat", max_retries=1)
+
+    assert result.image == raw

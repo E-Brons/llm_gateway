@@ -1,5 +1,7 @@
 """Tests for retry_text_completion and retry_image_generation helpers."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -256,3 +258,167 @@ def test_retry_text_non_timeout_is_still_retried():
     result = retry_text_completion(call_fn, [{"role": "user", "content": "x"}], 3, "m")
     assert result.content == "ok"
     assert calls[0] == 3
+
+
+# ---------------------------------------------------------------------------
+# _is_client_error
+# ---------------------------------------------------------------------------
+
+
+def test_is_client_error_requests_4xx():
+    import requests
+
+    from src._retry import _is_client_error
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 422
+    exc = requests.exceptions.HTTPError(response=mock_resp)
+    assert _is_client_error(exc) is True
+
+
+def test_is_client_error_requests_5xx_returns_false():
+    import requests
+
+    from src._retry import _is_client_error
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 500
+    exc = requests.exceptions.HTTPError(response=mock_resp)
+    assert _is_client_error(exc) is False
+
+
+def test_is_client_error_httpx_4xx():
+    import httpx
+
+    from src._retry import _is_client_error
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 400
+    exc = httpx.HTTPStatusError("bad request", request=MagicMock(), response=mock_resp)
+    assert _is_client_error(exc) is True
+
+
+def test_is_client_error_httpx_5xx_returns_false():
+    import httpx
+
+    from src._retry import _is_client_error
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 503
+    exc = httpx.HTTPStatusError("service unavailable", request=MagicMock(), response=mock_resp)
+    assert _is_client_error(exc) is False
+
+
+def test_is_client_error_other_exception_returns_false():
+    from src._retry import _is_client_error
+
+    assert _is_client_error(RuntimeError("something else")) is False
+
+
+# ---------------------------------------------------------------------------
+# _is_timeout
+# ---------------------------------------------------------------------------
+
+
+def test_is_timeout_httpx_timeout_exception():
+    import httpx
+
+    from src._retry import _is_timeout
+
+    exc = httpx.TimeoutException("timed out", request=MagicMock())
+    assert _is_timeout(exc) is True
+
+
+def test_is_timeout_httpx_read_timeout():
+    import httpx
+
+    from src._retry import _is_timeout
+
+    exc = httpx.ReadTimeout("read timeout", request=MagicMock())
+    assert _is_timeout(exc) is True
+
+
+def test_is_timeout_message_timed_out():
+    from src._retry import _is_timeout
+
+    assert _is_timeout(RuntimeError("Request timed out after 30s")) is True
+
+
+def test_is_timeout_message_timeout():
+    from src._retry import _is_timeout
+
+    assert _is_timeout(RuntimeError("Connection timeout")) is True
+
+
+def test_is_timeout_message_read_timeout():
+    from src._retry import _is_timeout
+
+    assert _is_timeout(RuntimeError("read timeout")) is True
+
+
+def test_is_timeout_unrelated_error_returns_false():
+    from src._retry import _is_timeout
+
+    assert _is_timeout(RuntimeError("some other error")) is False
+
+
+# ---------------------------------------------------------------------------
+# client-error and timeout propagation in retry loops
+# ---------------------------------------------------------------------------
+
+
+def test_retry_text_client_error_raises_immediately():
+    import requests
+
+    from src._retry import retry_text_completion
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 400
+    exc = requests.exceptions.HTTPError(response=mock_resp)
+    calls = [0]
+
+    def call_fn(msgs):
+        calls[0] += 1
+        raise exc
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        retry_text_completion(call_fn, [{"role": "user", "content": "x"}], 3, "m")
+
+    assert calls[0] == 1  # must not retry on 4xx
+
+
+def test_retry_image_client_error_raises_immediately():
+    import requests
+
+    from src._retry import retry_image_generation
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 422
+    exc = requests.exceptions.HTTPError(response=mock_resp)
+    calls = [0]
+
+    def call_fn():
+        calls[0] += 1
+        raise exc
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        retry_image_generation(call_fn, 3, "m")
+
+    assert calls[0] == 1
+
+
+def test_retry_image_httpx_timeout_raises_immediately():
+    import httpx
+
+    from src._retry import retry_image_generation
+
+    calls = [0]
+
+    def call_fn():
+        calls[0] += 1
+        raise httpx.ReadTimeout("read timeout", request=MagicMock())
+
+    with pytest.raises(httpx.ReadTimeout):
+        retry_image_generation(call_fn, 3, "m")
+
+    assert calls[0] == 1

@@ -491,3 +491,407 @@ def test_local_override_loaded(tmp_path):
                 with TestClient(app) as c:
                     resp = c.get("/health")
                     assert resp.status_code == 200
+
+
+# ── discovery routes ──────────────────────────────────────────────────────────
+
+
+def test_root(client):
+    c, _ = client
+    resp = c.get("/")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "llm_gateway"
+    assert "docs" in data
+
+
+def test_ollama_tags(client):
+    c, _ = client
+    resp = c.get("/api/tags")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "models" in data
+    assert isinstance(data["models"], list)
+    assert len(data["models"]) > 0
+
+
+def test_ollama_tags_deduplicates_models(client):
+    """Models shared across tasks appear only once in the /api/tags list."""
+    c, _ = client
+    resp = c.get("/api/tags")
+    names = [m["name"] for m in resp.json()["models"]]
+    # phi3 appears in general/text_gen/reasoning/tools — should be listed once
+    assert names.count("phi3") == 1
+
+
+def test_openai_models(client):
+    c, _ = client
+    resp = c.get("/v1/models")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["object"] == "list"
+    assert isinstance(data["data"], list)
+    assert len(data["data"]) > 0
+    entry = data["data"][0]
+    assert "id" in entry
+    assert entry["object"] == "model"
+
+
+def test_ollama_tags_returns_empty_when_config_none():
+    """GET /api/tags returns an empty models list when _config is None."""
+    import src.server as server_mod
+    from starlette.testclient import TestClient as StarletteClient
+
+    from src.server import app
+
+    original = server_mod._config
+    server_mod._config = None
+    try:
+        c = StarletteClient(app, raise_server_exceptions=False)
+        resp = c.get("/api/tags")
+    finally:
+        server_mod._config = original
+
+    assert resp.status_code == 200
+    assert resp.json() == {"models": []}
+
+
+def test_openai_models_returns_empty_when_config_none():
+    """GET /v1/models returns empty data when _config is None."""
+    import src.server as server_mod
+    from starlette.testclient import TestClient as StarletteClient
+
+    from src.server import app
+
+    original = server_mod._config
+    server_mod._config = None
+    try:
+        c = StarletteClient(app, raise_server_exceptions=False)
+        resp = c.get("/v1/models")
+    finally:
+        server_mod._config = original
+
+    assert resp.status_code == 200
+    assert resp.json() == {"object": "list", "data": []}
+
+
+def test_models_returns_503_when_config_none():
+    """GET /models returns 503 when _config is None."""
+    import src.server as server_mod
+    from starlette.testclient import TestClient as StarletteClient
+
+    from src.server import app
+
+    original = server_mod._config
+    server_mod._config = None
+    try:
+        c = StarletteClient(app, raise_server_exceptions=False)
+        resp = c.get("/models")
+    finally:
+        server_mod._config = original
+
+    assert resp.status_code == 503
+
+
+# ── _f() guard ───────────────────────────────────────────────────────────────
+
+
+def test_factory_not_initialized_returns_503(tmp_path):
+    """Calling an endpoint before the factory is initialised returns 503."""
+    import src.server as server_mod
+    from fastapi.testclient import TestClient
+
+    from src.server import app
+
+    cfg = tmp_path / "llm_route.yml"
+    cfg.write_text(_MINIMAL_CONFIG)
+
+    env = {
+        "LLM_GATEWAY_ROUTE": str(cfg),
+        "LLM_GATEWAY_ROUTE_LOCAL": str(tmp_path / "no_override.yml"),
+        "LLM_GATEWAY_HOST": "127.0.0.1",
+        "LLM_GATEWAY_PORT": "4096",
+    }
+
+    with patch.dict(os.environ, env):
+        with patch("src.server.LLMFactory", return_value=MagicMock()):
+            with patch("src.server._run_sanity_checks"):
+                with TestClient(app, raise_server_exceptions=False) as c:
+                    original = server_mod._factory
+                    server_mod._factory = None
+                    try:
+                        resp = c.post(
+                            "/general",
+                            json={"messages": [{"role": "user", "content": "x"}]},
+                        )
+                    finally:
+                        server_mod._factory = original
+
+    assert resp.status_code == 503
+
+
+# ── _load_settings ────────────────────────────────────────────────────────────
+
+
+def test_load_settings_returns_empty_when_no_files(tmp_path):
+    import json as _json
+
+    from src.server import _load_settings
+
+    orig = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        result = _load_settings()
+    finally:
+        os.chdir(orig)
+    assert result == {}
+
+
+def test_load_settings_reads_base_json(tmp_path):
+    import json as _json
+
+    from src.server import _load_settings
+
+    settings = {"key": "value", "nested": {"a": 1}}
+    (tmp_path / "settings.json").write_text(_json.dumps(settings))
+
+    orig = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        result = _load_settings()
+    finally:
+        os.chdir(orig)
+    assert result == settings
+
+
+def test_load_settings_merges_override(tmp_path):
+    import json as _json
+
+    from src.server import _load_settings
+
+    base = {"key": "base", "extra": "preserved"}
+    override = {"key": "overridden"}
+
+    (tmp_path / "settings.json").write_text(_json.dumps(base))
+    (tmp_path / "local").mkdir()
+    (tmp_path / "local" / "settings.json").write_text(_json.dumps(override))
+
+    orig = os.getcwd()
+    os.chdir(tmp_path)
+    try:
+        result = _load_settings()
+    finally:
+        os.chdir(orig)
+    assert result["key"] == "overridden"
+    assert result["extra"] == "preserved"
+
+
+# ── _minimal_png ──────────────────────────────────────────────────────────────
+
+
+def test_minimal_png_is_valid_png():
+    import struct
+
+    from src.server import _minimal_png
+
+    data = _minimal_png()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    width, height = struct.unpack(">II", data[16:24])
+    assert width == 1
+    assert height == 1
+
+
+# ── _log_startup with ipadapter_faceid ───────────────────────────────────────
+
+
+def test_log_startup_with_ipadapter_faceid():
+    """_log_startup runs without error when both ipadapter and ipadapter_faceid are configured."""
+    from src.config import LLMConfig, LLMTypeConfig
+    from src.server import _log_startup
+
+    cfg = LLMConfig(
+        general=LLMTypeConfig(implementation="ollama", model="phi3"),
+        text_gen=LLMTypeConfig(implementation="ollama", model="phi3"),
+        reasoning=LLMTypeConfig(implementation="ollama", model="phi3"),
+        image_gen=LLMTypeConfig(implementation="ollama", model="flux"),
+        image_inspector=LLMTypeConfig(implementation="ollama", model="llava"),
+        tools=LLMTypeConfig(implementation="ollama", model="phi3"),
+        ipadapter=LLMTypeConfig(
+            implementation="diffusion_server",
+            model="ip-adapter_sd15",
+            api_base="http://localhost:7860",
+        ),
+        ipadapter_faceid=LLMTypeConfig(
+            implementation="diffusion_server",
+            model="ip-adapter-faceid",
+            api_base="http://localhost:7860",
+        ),
+    )
+    _log_startup(cfg, {}, "llm_route.yml", "local.yml", False, "127.0.0.1", "4096")
+
+
+# ── diffusion server availability in /models ──────────────────────────────────
+
+
+_IPADAPTER_CONFIG = textwrap.dedent("""\
+    general:
+      implementation: ollama
+      model: phi3
+      ollama_url: http://localhost:11434
+    text_gen:
+      implementation: ollama
+      model: phi3
+      ollama_url: http://localhost:11434
+    reasoning:
+      implementation: ollama
+      model: phi3
+      ollama_url: http://localhost:11434
+    image_gen:
+      implementation: ollama
+      model: flux
+      ollama_url: http://localhost:11434
+    image_inspector:
+      implementation: ollama
+      model: llava
+      ollama_url: http://localhost:11434
+    tools:
+      implementation: ollama
+      model: phi3
+      ollama_url: http://localhost:11434
+    ipadapter:
+      implementation: diffusion_server
+      model: ip-adapter_sd15
+      api_base: http://localhost:7860
+""")
+
+_IPADAPTER_BOTH_CONFIG = textwrap.dedent("""\
+    general:
+      implementation: ollama
+      model: phi3
+      ollama_url: http://localhost:11434
+    text_gen:
+      implementation: ollama
+      model: phi3
+      ollama_url: http://localhost:11434
+    reasoning:
+      implementation: ollama
+      model: phi3
+      ollama_url: http://localhost:11434
+    image_gen:
+      implementation: ollama
+      model: flux
+      ollama_url: http://localhost:11434
+    image_inspector:
+      implementation: ollama
+      model: llava
+      ollama_url: http://localhost:11434
+    tools:
+      implementation: ollama
+      model: phi3
+      ollama_url: http://localhost:11434
+    ipadapter:
+      implementation: diffusion_server
+      model: ip-adapter_sd15
+      api_base: http://localhost:7860
+    ipadapter_faceid:
+      implementation: diffusion_server
+      model: ip-adapter-faceid
+      api_base: http://localhost:7861
+""")
+
+
+@pytest.fixture
+def ipadapter_client(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from src.server import app
+
+    cfg = tmp_path / "llm_route.yml"
+    cfg.write_text(_IPADAPTER_CONFIG)
+
+    env = {
+        "LLM_GATEWAY_ROUTE": str(cfg),
+        "LLM_GATEWAY_ROUTE_LOCAL": str(tmp_path / "no_override.yml"),
+        "LLM_GATEWAY_HOST": "127.0.0.1",
+        "LLM_GATEWAY_PORT": "4096",
+    }
+
+    with patch.dict(os.environ, env):
+        with patch("src.server.LLMFactory", return_value=MagicMock()):
+            with patch("src.server._run_sanity_checks"):
+                with TestClient(app) as c:
+                    yield c
+
+
+def test_models_diffusion_server_listed(ipadapter_client):
+    """When a diffusion server is reachable its models appear in diffusion_available."""
+    def mock_get(url, **kwargs):
+        if "7860/models" in url:
+            return MagicMock(ok=True, json=MagicMock(return_value={"models": [{"name": "ip-adapter_sd15"}]}))
+        raise Exception("offline")
+
+    with patch("src.server._requests.get", side_effect=mock_get):
+        resp = ipadapter_client.get("/models")
+
+    assert resp.status_code == 200
+    assert "ip-adapter_sd15" in resp.json()["diffusion_available"]
+
+
+def test_models_diffusion_server_availability_flag(ipadapter_client):
+    """A configured diffusion model is flagged available=True when the server reports it."""
+    def mock_get(url, **kwargs):
+        if "7860/models" in url:
+            return MagicMock(ok=True, json=MagicMock(return_value={"models": [{"name": "ip-adapter_sd15"}]}))
+        raise Exception("offline")
+
+    with patch("src.server._requests.get", side_effect=mock_get):
+        resp = ipadapter_client.get("/models")
+
+    data = resp.json()
+    entry = next(
+        (e for e in data["configured"] if e["implementation"] == "diffusion_server"),
+        None,
+    )
+    assert entry is not None
+    assert entry.get("available") is True
+
+
+def test_models_diffusion_server_exception_is_silenced(ipadapter_client):
+    """If the diffusion server query raises, the exception is silently swallowed."""
+    with patch("src.server._requests.get", side_effect=Exception("all offline")):
+        resp = ipadapter_client.get("/models")
+
+    assert resp.status_code == 200
+    assert resp.json()["diffusion_available"] == []
+
+
+def test_models_diffusion_both_adapters_queried(tmp_path):
+    """When both ipadapter and ipadapter_faceid have different api_base URLs, both are queried."""
+    from fastapi.testclient import TestClient
+
+    from src.server import app
+
+    cfg = tmp_path / "llm_route.yml"
+    cfg.write_text(_IPADAPTER_BOTH_CONFIG)
+
+    env = {
+        "LLM_GATEWAY_ROUTE": str(cfg),
+        "LLM_GATEWAY_ROUTE_LOCAL": str(tmp_path / "no_override.yml"),
+        "LLM_GATEWAY_HOST": "127.0.0.1",
+        "LLM_GATEWAY_PORT": "4096",
+    }
+
+    def mock_get(url, **kwargs):
+        if "7860/models" in url or "7861/models" in url:
+            return MagicMock(ok=True, json=MagicMock(return_value={"models": [{"name": "ip-model"}]}))
+        raise Exception("offline")
+
+    with patch.dict(os.environ, env):
+        with patch("src.server.LLMFactory", return_value=MagicMock()):
+            with patch("src.server._run_sanity_checks"):
+                with TestClient(app) as c:
+                    with patch("src.server._requests.get", side_effect=mock_get):
+                        resp = c.get("/models")
+
+    assert resp.status_code == 200
+    assert "ip-model" in resp.json()["diffusion_available"]

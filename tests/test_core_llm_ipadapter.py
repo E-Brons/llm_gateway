@@ -599,3 +599,96 @@ def test_factory_ipadapter_faceid_not_configured_raises(tmp_path):
     factory = LLMFactory(cfg)
     with pytest.raises(ValueError, match="ipadapter_faceid is not configured"):
         factory.ipadapter_faceid()
+
+
+# ---------------------------------------------------------------------------
+# Error-response JSON parse fallback
+# ---------------------------------------------------------------------------
+
+
+def test_ipadapter_error_response_json_parse_fallback():
+    """When resp.ok is False and resp.json() raises, detail falls back to resp.text.
+
+    A 4xx client error is used so it propagates immediately without retrying.
+    """
+    import requests
+
+    from src.impl.impl_ipadapter import DiffusionServerIPAdapterLLM
+
+    bad_resp = MagicMock()
+    bad_resp.ok = False
+    bad_resp.status_code = 422
+    bad_resp.reason = "Unprocessable Entity"
+    bad_resp.json.side_effect = ValueError("not json")
+    bad_resp.text = "raw error text"
+
+    with patch("src.impl.impl_ipadapter.requests.post", return_value=bad_resp):
+        llm = DiffusionServerIPAdapterLLM(model="ip-adapter", api_base=_API_BASE)
+        with pytest.raises(requests.exceptions.HTTPError, match="raw error text"):
+            llm.generate("a cat", reference_images=[b"ref"], max_retries=1)
+
+
+def test_ipadapter_faceid_error_response_json_parse_fallback():
+    """FaceID: when resp.ok is False and resp.json() raises, detail falls back to resp.text."""
+    import requests
+
+    from src.impl.impl_ipadapter import DiffusionServerIPAdapterFaceIDLLM
+
+    bad_resp = MagicMock()
+    bad_resp.ok = False
+    bad_resp.status_code = 422
+    bad_resp.reason = "Unprocessable"
+    bad_resp.json.side_effect = ValueError("not json")
+    bad_resp.text = "invalid face image"
+
+    with patch("src.impl.impl_ipadapter.requests.post", return_value=bad_resp):
+        llm = DiffusionServerIPAdapterFaceIDLLM(model="ip-adapter-faceid", api_base=_API_BASE)
+        with pytest.raises(requests.exceptions.HTTPError, match="invalid face image"):
+            llm.generate("a portrait", reference_images=[b"face"], max_retries=1)
+
+
+# ---------------------------------------------------------------------------
+# IPAdapterLLM / IPAdapterFaceIDLLM abstract base class construction
+# ---------------------------------------------------------------------------
+
+
+def test_ipadapter_llm_base_construction():
+    """IPAdapterLLM.__init__ sets all attributes correctly."""
+    from src.responses import ImageResponse
+    from src.types import IPAdapterLLM
+
+    class _Concrete(IPAdapterLLM):
+        def generate(self, prompt, reference_image, **kwargs) -> ImageResponse:  # type: ignore[override]
+            return ImageResponse(image=b"x", model=self.model, duration_ms=1.0, attempts=1)
+
+    llm = _Concrete(
+        model="ip-adapter",
+        timeout=120,
+        temperature=0.3,
+        max_tokens=512,
+        response_schema={"type": "object"},
+    )
+    assert llm.model == "ip-adapter"
+    assert llm.timeout == 120
+    assert llm.temperature == 0.3
+    assert llm.max_tokens == 512
+    assert llm.response_schema == {"type": "object"}
+
+
+def test_ipadapter_faceid_llm_base_construction():
+    """IPAdapterFaceIDLLM.__init__ sets all attributes correctly."""
+    from src.responses import ImageResponse
+    from src.types import IPAdapterFaceIDLLM
+
+    class _Concrete(IPAdapterFaceIDLLM):
+        def generate(self, prompt, face_image, **kwargs) -> ImageResponse:  # type: ignore[override]
+            return ImageResponse(image=b"y", model=self.model, duration_ms=1.0, attempts=1)
+
+    llm = _Concrete(
+        model="ip-adapter-faceid",
+        timeout=200,
+        temperature=0.5,
+        max_tokens=256,
+    )
+    assert llm.model == "ip-adapter-faceid"
+    assert llm.timeout == 200
