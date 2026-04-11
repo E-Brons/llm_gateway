@@ -68,7 +68,7 @@ def test_ipadapter_returns_image_gen_llm(diffusion_server_url):
     """factory.ipadapter() returns an ImageGenLLM — not a bespoke type."""
     from src.config import LLMConfig, LLMTypeConfig
     from src.factory import LLMFactory
-    from src.types import ImageGenLLM
+    from src.types import IPAdapterLLM
 
     cfg = LLMConfig(
         general=LLMTypeConfig(implementation="ollama", model="x"),
@@ -85,7 +85,7 @@ def test_ipadapter_returns_image_gen_llm(diffusion_server_url):
     )
     factory = LLMFactory(cfg)
     llm = factory.ipadapter()
-    assert isinstance(llm, ImageGenLLM)
+    assert isinstance(llm, IPAdapterLLM)
 
 
 def test_ipadapter_generate_returns_image(diffusion_server_url):
@@ -99,7 +99,7 @@ def test_ipadapter_generate_returns_image(diffusion_server_url):
     )
     result = llm.generate(
         "a cat sitting on a wooden bench",
-        reference_images=[_minimal_png()],
+        _minimal_png(),
         width=256,
         height=256,
         max_retries=1,
@@ -120,13 +120,13 @@ def test_ipadapter_weight_param_accepted(diffusion_server_url):
     )
     result = llm.generate(
         "a landscape",
-        reference_images=[_minimal_png()],
-        weight=0.8,
+        _minimal_png(),
+        ip_adapter_scale=0.8,
         width=256,
         height=256,
         max_retries=1,
     )
-    assert result.image, "Expected image bytes with explicit weight=0.8"
+    assert result.image, "Expected image bytes with explicit ip_adapter_scale=0.8"
 
 
 def test_ipadapter_validator_accepted(diffusion_server_url):
@@ -140,7 +140,7 @@ def test_ipadapter_validator_accepted(diffusion_server_url):
     )
     result = llm.generate(
         "a flower",
-        reference_images=[_minimal_png()],
+        _minimal_png(),
         width=256,
         height=256,
         max_retries=3,
@@ -160,14 +160,13 @@ def test_ipadapter_seed_produces_deterministic_output(diffusion_server_url):
         timeout=300,
     )
     kwargs = dict(
-        reference_images=[_minimal_png()],
         width=256,
         height=256,
         seed=1234,
         max_retries=1,
     )
-    r1 = llm.generate("a house", **kwargs)
-    r2 = llm.generate("a house", **kwargs)
+    r1 = llm.generate("a house", _minimal_png(), **kwargs)
+    r2 = llm.generate("a house", _minimal_png(), **kwargs)
     assert r1.image == r2.image, "Same seed should produce the same image"
 
 
@@ -180,7 +179,7 @@ def test_ipadapter_faceid_returns_image_gen_llm(diffusion_server_url):
     """factory.ipadapter_faceid() returns an ImageGenLLM — not a bespoke type."""
     from src.config import LLMConfig, LLMTypeConfig
     from src.factory import LLMFactory
-    from src.types import ImageGenLLM
+    from src.types import IPAdapterFaceIDLLM
 
     cfg = LLMConfig(
         general=LLMTypeConfig(implementation="ollama", model="x"),
@@ -197,7 +196,7 @@ def test_ipadapter_faceid_returns_image_gen_llm(diffusion_server_url):
     )
     factory = LLMFactory(cfg)
     llm = factory.ipadapter_faceid()
-    assert isinstance(llm, ImageGenLLM)
+    assert isinstance(llm, IPAdapterFaceIDLLM)
 
 
 def test_ipadapter_faceid_generate_returns_image(diffusion_server_url):
@@ -211,7 +210,7 @@ def test_ipadapter_faceid_generate_returns_image(diffusion_server_url):
     )
     result = llm.generate(
         "a person in a forest, natural lighting",
-        reference_images=[_face_image_bytes()],
+        _face_image_bytes(),
         width=256,
         height=256,
         max_retries=1,
@@ -232,10 +231,10 @@ def test_ipadapter_faceid_weight_param_accepted(diffusion_server_url):
     )
     result = llm.generate(
         "a portrait, studio lighting",
-        reference_images=[_face_image_bytes()],
-        weight=0.75,
+        _face_image_bytes(),
+        ip_adapter_scale=0.75,
         width=256,
         height=256,
         max_retries=1,
     )
-    assert result.image, "Expected image bytes with explicit weight=0.75"
+    assert result.image, "Expected image bytes with explicit ip_adapter_scale=0.75"

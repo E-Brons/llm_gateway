@@ -277,11 +277,15 @@ class IPAdapterLLM(ABC):
         *,
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
-        weight: float = 0.5,
+        ip_adapter_scale: float = 0.5,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
         num_inference_steps: int | None = None,
+        negative_prompt: str | None = None,
+        cfg_scale: float | None = None,
+        lora: str | None = None,
+        lora_weight: float = 1.0,
     ) -> "ImageResponse":  # noqa: F821
         """Generate an image conditioned on *reference_image* and return an ImageResponse."""
 
@@ -311,11 +315,15 @@ class IPAdapterFaceIDLLM(ABC):
         *,
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
-        weight: float = 0.5,
+        ip_adapter_scale: float = 0.5,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
         num_inference_steps: int | None = None,
+        negative_prompt: str | None = None,
+        cfg_scale: float | None = None,
+        lora: str | None = None,
+        lora_weight: float = 1.0,
     ) -> "ImageResponse":  # noqa: F821
         """Generate an image conditioned on *face_image* and return an ImageResponse."""
 

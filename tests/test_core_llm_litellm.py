@@ -383,3 +383,121 @@ def test_litellm_no_extra_body_when_options_none():
             llm.complete([{"role": "user", "content": "x"}])
 
     assert "extra_body" not in mock_c.call_args[1]
+
+
+# ---------------------------------------------------------------------------
+# api_base forwarding
+# ---------------------------------------------------------------------------
+
+
+def test_litellm_text_gen_api_base_passed():
+    from src.impl.impl_litellm import LiteLLMTextGenLLM
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion",
+            return_value=_mock_completion("ok"),
+        ) as mock_c:
+            llm = LiteLLMTextGenLLM(model="ollama/phi3", api_base="http://localhost:11434")
+            llm.complete([{"role": "user", "content": "x"}])
+
+    assert mock_c.call_args[1]["api_base"] == "http://localhost:11434"
+
+
+def test_litellm_reasoning_api_base_passed():
+    from src.impl.impl_litellm import LiteLLMReasoningLLM
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion",
+            return_value=_mock_completion("reasoning"),
+        ) as mock_c:
+            llm = LiteLLMReasoningLLM(model="claude-3-opus", api_base="http://custom:9000")
+            llm.complete([{"role": "user", "content": "think"}])
+
+    assert mock_c.call_args[1]["api_base"] == "http://custom:9000"
+
+
+def test_litellm_image_gen_api_base_passed():
+    import base64
+
+    from src.impl.impl_litellm import LiteLLMImageGenLLM
+
+    raw = b"\x89PNG"
+    b64 = base64.b64encode(raw).decode()
+    mock_img_resp = MagicMock()
+    mock_img_resp.data = [MagicMock()]
+    mock_img_resp.data[0].b64_json = b64
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch(
+            "src.impl.impl_litellm.litellm.image_generation", return_value=mock_img_resp
+        ) as mock_c:
+            llm = LiteLLMImageGenLLM(model="dall-e-3", api_base="http://img-server")
+            llm.generate("a cat", max_retries=1)
+
+    assert mock_c.call_args[1]["api_base"] == "http://img-server"
+
+
+def test_litellm_image_inspector_api_base_passed():
+    from src.impl.impl_litellm import LiteLLMImageInspectorLLM
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch(
+            "src.impl.impl_litellm.litellm.completion",
+            return_value=_mock_completion("I see a cat"),
+        ) as mock_c:
+            llm = LiteLLMImageInspectorLLM(model="gpt-4o", api_base="http://vision-api")
+            llm.inspect(b"imgdata", "analyst", "describe")
+
+    assert mock_c.call_args[1]["api_base"] == "http://vision-api"
+
+
+def test_litellm_tools_api_base_passed():
+    import json
+
+    from src.impl.impl_litellm import LiteLLMToolsLLM
+
+    mock_tc = MagicMock()
+    mock_tc.id = "c1"
+    mock_tc.function.name = "fn"
+    mock_tc.function.arguments = json.dumps({"x": 1})
+
+    mock_resp = MagicMock()
+    mock_resp.choices = [MagicMock()]
+    mock_resp.choices[0].message.content = None
+    mock_resp.choices[0].message.tool_calls = [mock_tc]
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch("src.impl.impl_litellm.litellm.completion", return_value=mock_resp) as mock_c:
+            llm = LiteLLMToolsLLM(model="gpt-4o", api_base="http://tools-api")
+            llm.complete([{"role": "user", "content": "x"}], [])
+
+    assert mock_c.call_args[1]["api_base"] == "http://tools-api"
+
+
+# ---------------------------------------------------------------------------
+# Invalid JSON in tool-call arguments
+# ---------------------------------------------------------------------------
+
+
+def test_litellm_tools_invalid_json_args_become_empty_dict():
+    """When tool_calls arguments contain invalid JSON, they fall back to {}."""
+    from src.impl.impl_litellm import LiteLLMToolsLLM
+
+    mock_tc = MagicMock()
+    mock_tc.id = "c1"
+    mock_tc.function.name = "broken"
+    mock_tc.function.arguments = "NOT_JSON{{{"
+
+    mock_resp = MagicMock()
+    mock_resp.choices = [MagicMock()]
+    mock_resp.choices[0].message.content = None
+    mock_resp.choices[0].message.tool_calls = [mock_tc]
+
+    with patch("src.impl.impl_litellm.reset_litellm_client"):
+        with patch("src.impl.impl_litellm.litellm.completion", return_value=mock_resp):
+            llm = LiteLLMToolsLLM(model="gpt-4o")
+            result = llm.complete([{"role": "user", "content": "x"}], [])
+
+    assert result.tool_calls[0].arguments == {}

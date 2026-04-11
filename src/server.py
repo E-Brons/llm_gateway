@@ -120,7 +120,7 @@ def _run_sanity_checks(factory: LLMFactory) -> None:
                 "ipadapter",
                 lambda: factory.ipadapter().generate(
                     "a solid red square",
-                    reference_images=[_minimal_png()],
+                    _minimal_png(),
                     width=32,
                     height=32,
                     num_inference_steps=1,
@@ -135,7 +135,7 @@ def _run_sanity_checks(factory: LLMFactory) -> None:
                 "ipadapter_faceid",
                 lambda: factory.ipadapter_faceid().generate(
                     "a portrait",
-                    reference_images=[_minimal_png()],
+                    _minimal_png(),
                     width=32,
                     height=32,
                     num_inference_steps=1,
@@ -373,7 +373,7 @@ class ToolsRequest(BaseModel):
 class IPAdapterRequest(BaseModel):
     prompt: str
     reference_image_b64: str  # base64-encoded reference PNG
-    weight: float = 0.5
+    ip_adapter_scale: float = 0.5
     width: int = 256
     height: int = 256
     seed: int | None = None
@@ -383,8 +383,8 @@ class IPAdapterRequest(BaseModel):
 
 class IPAdapterFaceIDRequest(BaseModel):
     prompt: str
-    face_images_b64: list[str]  # base64-encoded face PNGs (one or more)
-    weight: float = 0.5
+    face_image_b64: str  # base64-encoded face PNG
+    ip_adapter_scale: float = 0.5
     width: int = 256
     height: int = 256
     seed: int | None = None
@@ -667,8 +667,8 @@ def ipadapter(req: IPAdapterRequest):
         .ipadapter()
         .generate(
             req.prompt,
-            reference_images=[reference_image],
-            weight=req.weight,
+            reference_image,
+            ip_adapter_scale=req.ip_adapter_scale,
             width=req.width,
             height=req.height,
             seed=req.seed,
@@ -688,14 +688,14 @@ def ipadapter(req: IPAdapterRequest):
 @app.post("/ipadapter_faceid")
 def ipadapter_faceid(req: IPAdapterFaceIDRequest):
     _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
-    face_image = base64.b64decode(req.face_images_b64[0])
+    face_image = base64.b64decode(req.face_image_b64)
     resp = (
         _f()
         .ipadapter_faceid()
         .generate(
             req.prompt,
-            reference_images=[face_image],
-            weight=req.weight,
+            face_image,
+            ip_adapter_scale=req.ip_adapter_scale,
             width=req.width,
             height=req.height,
             seed=req.seed,
