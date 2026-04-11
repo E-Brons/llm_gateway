@@ -55,6 +55,7 @@ LLM_GATEWAY_ROUTE="$CONFIG_FILE" \
 LLM_GATEWAY_ROUTE_LOCAL="$CONFIG_LOCAL" \
 LLM_GATEWAY_HOST="$HOST" \
 LLM_GATEWAY_PORT="$PORT" \
+CLAUDE_CLI_PATH="${CLAUDE_CLI_PATH:-$(command -v claude 2>/dev/null || echo claude)}" \
   "$VENV/bin/uvicorn" src.server:app \
   --host "$HOST" \
   --port "$PORT" \
