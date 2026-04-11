@@ -10,6 +10,29 @@ from .responses import ImageResponse, TextResponse
 
 # Exception types that indicate a timeout — retrying is pointless.
 # We import lazily to avoid hard dependencies on requests/httpx/litellm.
+
+
+def _is_client_error(exc: BaseException) -> bool:
+    """Return True for 4xx HTTP errors — bad input, retrying the same payload won't help."""
+    try:
+        import requests.exceptions
+
+        if isinstance(exc, requests.exceptions.HTTPError):
+            resp = getattr(exc, "response", None)
+            if resp is not None and 400 <= resp.status_code < 500:
+                return True
+    except ImportError:
+        pass
+    try:
+        import httpx
+
+        if isinstance(exc, httpx.HTTPStatusError) and 400 <= exc.response.status_code < 500:
+            return True
+    except ImportError:
+        pass
+    return False
+
+
 def _is_timeout(exc: BaseException) -> bool:
     try:
         import requests.exceptions
@@ -97,6 +120,8 @@ def retry_text_completion(
         except Exception as exc:
             if _is_timeout(exc):
                 raise
+            if _is_client_error(exc):
+                raise
             err = str(exc)
             last_error = err
             if "Transfer-Encoding" in err and on_transfer_error is not None:
@@ -176,6 +201,8 @@ def retry_image_generation(
 
         except Exception as exc:
             if _is_timeout(exc):
+                raise
+            if _is_client_error(exc):
                 raise
             err = str(exc)
             last_error = err
