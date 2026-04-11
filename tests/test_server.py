@@ -539,9 +539,9 @@ def test_openai_models(client):
 
 def test_ollama_tags_returns_empty_when_config_none():
     """GET /api/tags returns an empty models list when _config is None."""
-    import src.server as server_mod
     from starlette.testclient import TestClient as StarletteClient
 
+    import src.server as server_mod
     from src.server import app
 
     original = server_mod._config
@@ -558,9 +558,9 @@ def test_ollama_tags_returns_empty_when_config_none():
 
 def test_openai_models_returns_empty_when_config_none():
     """GET /v1/models returns empty data when _config is None."""
-    import src.server as server_mod
     from starlette.testclient import TestClient as StarletteClient
 
+    import src.server as server_mod
     from src.server import app
 
     original = server_mod._config
@@ -577,9 +577,9 @@ def test_openai_models_returns_empty_when_config_none():
 
 def test_models_returns_503_when_config_none():
     """GET /models returns 503 when _config is None."""
-    import src.server as server_mod
     from starlette.testclient import TestClient as StarletteClient
 
+    import src.server as server_mod
     from src.server import app
 
     original = server_mod._config
@@ -598,9 +598,9 @@ def test_models_returns_503_when_config_none():
 
 def test_factory_not_initialized_returns_503(tmp_path):
     """Calling an endpoint before the factory is initialised returns 503."""
-    import src.server as server_mod
     from fastapi.testclient import TestClient
 
+    import src.server as server_mod
     from src.server import app
 
     cfg = tmp_path / "llm_route.yml"
@@ -634,7 +634,6 @@ def test_factory_not_initialized_returns_503(tmp_path):
 
 
 def test_load_settings_returns_empty_when_no_files(tmp_path):
-    import json as _json
 
     from src.server import _load_settings
 
