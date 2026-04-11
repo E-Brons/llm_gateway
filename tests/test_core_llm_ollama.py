@@ -466,9 +466,7 @@ def test_ollama_generate_response_schema_sets_format():
     mock_resp.raise_for_status = MagicMock()
     mock_resp.json.return_value = {"response": "a label", "model": "llava"}
 
-    with patch(
-        "src.impl.impl_ollama.requests.post", return_value=mock_resp
-    ) as mock_post:
+    with patch("src.impl.impl_ollama.requests.post", return_value=mock_resp) as mock_post:
         llm = OllamaImageInspectorLLM(model="llava", ollama_url=_OLLAMA_URL)
         llm.inspect(b"imgdata", "sys", "describe", response_schema=schema)
 

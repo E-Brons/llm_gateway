@@ -469,9 +469,7 @@ def test_litellm_tools_api_base_passed():
     mock_resp.choices[0].message.tool_calls = [mock_tc]
 
     with patch("src.impl.impl_litellm.reset_litellm_client"):
-        with patch(
-            "src.impl.impl_litellm.litellm.completion", return_value=mock_resp
-        ) as mock_c:
+        with patch("src.impl.impl_litellm.litellm.completion", return_value=mock_resp) as mock_c:
             llm = LiteLLMToolsLLM(model="gpt-4o", api_base="http://tools-api")
             llm.complete([{"role": "user", "content": "x"}], [])
 

@@ -824,9 +824,12 @@ def ipadapter_client(tmp_path):
 
 def test_models_diffusion_server_listed(ipadapter_client):
     """When a diffusion server is reachable its models appear in diffusion_available."""
+
     def mock_get(url, **kwargs):
         if "7860/models" in url:
-            return MagicMock(ok=True, json=MagicMock(return_value={"models": [{"name": "ip-adapter_sd15"}]}))
+            return MagicMock(
+                ok=True, json=MagicMock(return_value={"models": [{"name": "ip-adapter_sd15"}]})
+            )
         raise Exception("offline")
 
     with patch("src.server._requests.get", side_effect=mock_get):
@@ -838,9 +841,12 @@ def test_models_diffusion_server_listed(ipadapter_client):
 
 def test_models_diffusion_server_availability_flag(ipadapter_client):
     """A configured diffusion model is flagged available=True when the server reports it."""
+
     def mock_get(url, **kwargs):
         if "7860/models" in url:
-            return MagicMock(ok=True, json=MagicMock(return_value={"models": [{"name": "ip-adapter_sd15"}]}))
+            return MagicMock(
+                ok=True, json=MagicMock(return_value={"models": [{"name": "ip-adapter_sd15"}]})
+            )
         raise Exception("offline")
 
     with patch("src.server._requests.get", side_effect=mock_get):
@@ -882,7 +888,9 @@ def test_models_diffusion_both_adapters_queried(tmp_path):
 
     def mock_get(url, **kwargs):
         if "7860/models" in url or "7861/models" in url:
-            return MagicMock(ok=True, json=MagicMock(return_value={"models": [{"name": "ip-model"}]}))
+            return MagicMock(
+                ok=True, json=MagicMock(return_value={"models": [{"name": "ip-model"}]})
+            )
         raise Exception("offline")
 
     with patch.dict(os.environ, env):
