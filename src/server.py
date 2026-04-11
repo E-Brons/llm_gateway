@@ -316,6 +316,7 @@ def _register_exception_handlers(application: FastAPI) -> None:
     except ImportError:
         pass
     application.add_exception_handler(ValueError, _handle_error)
+    application.add_exception_handler(RuntimeError, _handle_error)
 
 
 _register_exception_handlers(app)

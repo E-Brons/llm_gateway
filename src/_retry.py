@@ -7,7 +7,6 @@ from typing import Callable
 
 from .responses import ImageResponse, TextResponse
 
-
 # Exception types that indicate a timeout — retrying is pointless.
 # We import lazily to avoid hard dependencies on requests/httpx/litellm.
 

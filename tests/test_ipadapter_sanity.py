@@ -47,7 +47,16 @@ def _is_png(data: bytes) -> bool:
 
 
 _DIFFUSION_MODEL = os.environ.get("IPADAPTER_MODEL", "ip-adapter_sd15_light_v11")
-_FACEID_MODEL = os.environ.get("IPADAPTER_FACEID_MODEL", "ip-adapter-faceid-plus_sd15")
+_FACEID_MODEL = os.environ.get("IPADAPTER_FACEID_MODEL", "ip-adapter-faceid_sd15")
+_FACE_IMAGE_PATH = os.environ.get("IPADAPTER_FACE_IMAGE")
+
+
+def _face_image_bytes() -> bytes:
+    """Return a real face image for FaceID tests, or skip if none provided."""
+    if not _FACE_IMAGE_PATH:
+        pytest.skip("Set IPADAPTER_FACE_IMAGE=/path/to/face.jpg to run FaceID inference tests")
+    with open(_FACE_IMAGE_PATH, "rb") as f:
+        return f.read()
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +211,7 @@ def test_ipadapter_faceid_generate_returns_image(diffusion_server_url):
     )
     result = llm.generate(
         "a person in a forest, natural lighting",
-        reference_images=[_minimal_png(r=220, g=180, b=160)],
+        reference_images=[_face_image_bytes()],
         width=256,
         height=256,
         max_retries=1,
@@ -223,7 +232,7 @@ def test_ipadapter_faceid_weight_param_accepted(diffusion_server_url):
     )
     result = llm.generate(
         "a portrait, studio lighting",
-        reference_images=[_minimal_png(r=220, g=180, b=160)],
+        reference_images=[_face_image_bytes()],
         weight=0.75,
         width=256,
         height=256,

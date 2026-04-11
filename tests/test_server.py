@@ -445,7 +445,6 @@ def test_unhandled_error_returns_502(client):
     assert "something broke" in resp.json()["detail"]
 
 
-
 def test_config_not_found(tmp_path):
     from fastapi.testclient import TestClient
 
