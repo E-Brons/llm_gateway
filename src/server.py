@@ -415,6 +415,7 @@ class IPAdapterRequest(BaseModel):
     height: int = 256
     seed: int | None = None
     optimize: Literal["quality", "normal", "fast"] = "normal"
+    num_inference_steps: int | None = None
     negative_prompt: str | None = None
     cfg_scale: float | None = None
     lora: str | None = None
@@ -430,11 +431,20 @@ class IPAdapterFaceIDRequest(BaseModel):
     height: int = 256
     seed: int | None = None
     optimize: Literal["quality", "normal", "fast"] = "normal"
+    num_inference_steps: int | None = None
     negative_prompt: str | None = None
     cfg_scale: float | None = None
     lora: str | None = None
     lora_weight: float = 1.0
     max_retries: int = 3
+
+
+class ImageEndpointResponse(BaseModel):
+    image_b64: str
+    model: str
+    duration_ms: float
+    attempts: int
+    last_error: str | None = None
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
@@ -650,7 +660,7 @@ def reasoning(req: ReasoningRequest):
     )
 
 
-@app.post("/image_gen")
+@app.post("/image_gen", response_model=ImageEndpointResponse)
 def image_gen(req: ImageGenRequest):
     _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
     reference_images = (
@@ -671,13 +681,13 @@ def image_gen(req: ImageGenRequest):
             max_retries=req.max_retries,
         )
     )
-    return {
-        "image_b64": base64.b64encode(resp.image).decode(),
-        "model": resp.model,
-        "duration_ms": resp.duration_ms,
-        "attempts": resp.attempts,
-        "last_error": resp.last_error,
-    }
+    return ImageEndpointResponse(
+        image_b64=base64.b64encode(resp.image).decode(),
+        model=resp.model,
+        duration_ms=resp.duration_ms,
+        attempts=resp.attempts,
+        last_error=resp.last_error,
+    )
 
 
 @app.post("/image_inspector")
@@ -703,10 +713,15 @@ def tools(req: ToolsRequest):
     return _f().tools().complete(req.messages, req.tools, max_retries=req.max_retries).model_dump()
 
 
-@app.post("/ipadapter")
+@app.post("/ipadapter", response_model=ImageEndpointResponse)
 def ipadapter(req: IPAdapterRequest):
     _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
     reference_image = base64.b64decode(req.reference_image_b64)
+    steps = (
+        req.num_inference_steps
+        if req.num_inference_steps is not None
+        else _OPTIMIZE_STEPS[req.optimize]
+    )
     resp = (
         _f()
         .ipadapter()
@@ -717,7 +732,7 @@ def ipadapter(req: IPAdapterRequest):
             width=req.width,
             height=req.height,
             seed=req.seed,
-            num_inference_steps=_OPTIMIZE_STEPS[req.optimize],
+            num_inference_steps=steps,
             negative_prompt=req.negative_prompt,
             cfg_scale=req.cfg_scale,
             lora=req.lora,
@@ -725,19 +740,24 @@ def ipadapter(req: IPAdapterRequest):
             max_retries=req.max_retries,
         )
     )
-    return {
-        "image_b64": base64.b64encode(resp.image).decode(),
-        "model": resp.model,
-        "duration_ms": resp.duration_ms,
-        "attempts": resp.attempts,
-        "last_error": resp.last_error,
-    }
+    return ImageEndpointResponse(
+        image_b64=base64.b64encode(resp.image).decode(),
+        model=resp.model,
+        duration_ms=resp.duration_ms,
+        attempts=resp.attempts,
+        last_error=resp.last_error,
+    )
 
 
-@app.post("/ipadapter_faceid")
+@app.post("/ipadapter_faceid", response_model=ImageEndpointResponse)
 def ipadapter_faceid(req: IPAdapterFaceIDRequest):
     _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
     face_image = base64.b64decode(req.face_image_b64)
+    steps = (
+        req.num_inference_steps
+        if req.num_inference_steps is not None
+        else _OPTIMIZE_STEPS[req.optimize]
+    )
     resp = (
         _f()
         .ipadapter_faceid()
@@ -748,7 +768,7 @@ def ipadapter_faceid(req: IPAdapterFaceIDRequest):
             width=req.width,
             height=req.height,
             seed=req.seed,
-            num_inference_steps=_OPTIMIZE_STEPS[req.optimize],
+            num_inference_steps=steps,
             negative_prompt=req.negative_prompt,
             cfg_scale=req.cfg_scale,
             lora=req.lora,
@@ -756,10 +776,10 @@ def ipadapter_faceid(req: IPAdapterFaceIDRequest):
             max_retries=req.max_retries,
         )
     )
-    return {
-        "image_b64": base64.b64encode(resp.image).decode(),
-        "model": resp.model,
-        "duration_ms": resp.duration_ms,
-        "attempts": resp.attempts,
-        "last_error": resp.last_error,
-    }
+    return ImageEndpointResponse(
+        image_b64=base64.b64encode(resp.image).decode(),
+        model=resp.model,
+        duration_ms=resp.duration_ms,
+        attempts=resp.attempts,
+        last_error=resp.last_error,
+    )
