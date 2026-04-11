@@ -131,19 +131,28 @@ def _run_sanity_checks(factory: LLMFactory) -> None:
         )
 
     if _config is not None and _config.ipadapter_faceid is not None:
-        checks.append(
-            (
-                "ipadapter_faceid",
-                lambda: factory.ipadapter_faceid().generate(
-                    "a portrait",
-                    _minimal_png(),
-                    width=32,
-                    height=32,
-                    num_inference_steps=1,
-                    max_retries=1,
-                ),
+        _face_image_path = os.environ.get("SANITY_FACE_IMAGE")
+        if _face_image_path and os.path.exists(_face_image_path):
+            with open(_face_image_path, "rb") as _f:
+                _face_bytes = _f.read()
+            checks.append(
+                (
+                    "ipadapter_faceid",
+                    lambda: factory.ipadapter_faceid().generate(
+                        "a portrait",
+                        _face_bytes,
+                        width=32,
+                        height=32,
+                        num_inference_steps=1,
+                        max_retries=1,
+                    ),
+                )
             )
-        )
+        else:
+            logger.warning(
+                "  ipadapter_faceid sanity check skipped — "
+                "set SANITY_FACE_IMAGE=/path/to/face.jpg to enable it"
+            )
 
     logger.info(sep)
     logger.info("  Sanity checks")
@@ -402,6 +411,10 @@ class IPAdapterRequest(BaseModel):
     height: int = 256
     seed: int | None = None
     optimize: Literal["quality", "normal", "fast"] = "normal"
+    negative_prompt: str | None = None
+    cfg_scale: float | None = None
+    lora: str | None = None
+    lora_weight: float = 1.0
     max_retries: int = 3
 
 
@@ -413,6 +426,10 @@ class IPAdapterFaceIDRequest(BaseModel):
     height: int = 256
     seed: int | None = None
     optimize: Literal["quality", "normal", "fast"] = "normal"
+    negative_prompt: str | None = None
+    cfg_scale: float | None = None
+    lora: str | None = None
+    lora_weight: float = 1.0
     max_retries: int = 3
 
 
@@ -697,6 +714,10 @@ def ipadapter(req: IPAdapterRequest):
             height=req.height,
             seed=req.seed,
             num_inference_steps=_OPTIMIZE_STEPS[req.optimize],
+            negative_prompt=req.negative_prompt,
+            cfg_scale=req.cfg_scale,
+            lora=req.lora,
+            lora_weight=req.lora_weight,
             max_retries=req.max_retries,
         )
     )
@@ -724,6 +745,10 @@ def ipadapter_faceid(req: IPAdapterFaceIDRequest):
             height=req.height,
             seed=req.seed,
             num_inference_steps=_OPTIMIZE_STEPS[req.optimize],
+            negative_prompt=req.negative_prompt,
+            cfg_scale=req.cfg_scale,
+            lora=req.lora,
+            lora_weight=req.lora_weight,
             max_retries=req.max_retries,
         )
     )
