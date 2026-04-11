@@ -14,6 +14,7 @@ from typing import Any, Literal
 
 import requests as _requests
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -320,6 +321,14 @@ def _register_exception_handlers(application: FastAPI) -> None:
 
 
 _register_exception_handlers(app)
+
+
+@app.exception_handler(RequestValidationError)
+async def _handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    logger.warning(
+        "422 validation error on %s %s: %s", request.method, request.url.path, exc.errors()
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 def _f() -> LLMFactory:
