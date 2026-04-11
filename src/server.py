@@ -10,10 +10,12 @@ import os
 import struct
 import zlib
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Literal
 
 import requests as _requests
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -130,19 +132,31 @@ def _run_sanity_checks(factory: LLMFactory) -> None:
         )
 
     if _config is not None and _config.ipadapter_faceid is not None:
-        checks.append(
-            (
-                "ipadapter_faceid",
-                lambda: factory.ipadapter_faceid().generate(
-                    "a portrait",
-                    _minimal_png(),
-                    width=32,
-                    height=32,
-                    num_inference_steps=1,
-                    max_retries=1,
-                ),
-            )
+        _face_image_path = os.environ.get(
+            "SANITY_FACE_IMAGE",
+            str(Path(__file__).parent.parent / "assets" / "sanity_face.jpg"),
         )
+        if os.path.exists(_face_image_path):
+            with open(_face_image_path, "rb") as _f:
+                _face_bytes = _f.read()
+            checks.append(
+                (
+                    "ipadapter_faceid",
+                    lambda: factory.ipadapter_faceid().generate(
+                        "a portrait",
+                        _face_bytes,
+                        width=32,
+                        height=32,
+                        num_inference_steps=1,
+                        max_retries=1,
+                    ),
+                )
+            )
+        else:
+            logger.warning(
+                "  ipadapter_faceid sanity check skipped — "
+                "add a face image at assets/sanity_face.jpg or set SANITY_FACE_IMAGE"
+            )
 
     logger.info(sep)
     logger.info("  Sanity checks")
@@ -299,6 +313,20 @@ async def _handle_error(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
+async def _handle_http_error(request: Request, exc: Exception) -> JSONResponse:
+    import requests.exceptions
+
+    assert isinstance(exc, requests.exceptions.HTTPError)
+    resp = exc.response
+    status = resp.status_code if resp is not None else 502
+    detail = str(exc)
+    if status < 500:
+        logger.warning("Upstream 4xx on %s: %s", request.url.path, detail)
+        return JSONResponse(status_code=422, content={"detail": detail})
+    logger.error("Upstream 5xx on %s: %s", request.url.path, detail)
+    return JSONResponse(status_code=502, content={"detail": detail})
+
+
 def _register_exception_handlers(application: FastAPI) -> None:
     try:
         import requests.exceptions
@@ -306,6 +334,7 @@ def _register_exception_handlers(application: FastAPI) -> None:
         application.add_exception_handler(requests.exceptions.ReadTimeout, _handle_timeout)
         application.add_exception_handler(requests.exceptions.Timeout, _handle_timeout)
         application.add_exception_handler(requests.exceptions.ConnectionError, _handle_error)
+        application.add_exception_handler(requests.exceptions.HTTPError, _handle_http_error)
     except ImportError:
         pass
     try:
@@ -320,6 +349,14 @@ def _register_exception_handlers(application: FastAPI) -> None:
 
 
 _register_exception_handlers(app)
+
+
+@app.exception_handler(RequestValidationError)
+async def _handle_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    logger.warning(
+        "422 validation error on %s %s: %s", request.method, request.url.path, exc.errors()
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 
 def _f() -> LLMFactory:
@@ -378,6 +415,11 @@ class IPAdapterRequest(BaseModel):
     height: int = 256
     seed: int | None = None
     optimize: Literal["quality", "normal", "fast"] = "normal"
+    num_inference_steps: int | None = None
+    negative_prompt: str | None = None
+    cfg_scale: float | None = None
+    lora: str | None = None
+    lora_weight: float = 1.0
     max_retries: int = 3
 
 
@@ -389,7 +431,20 @@ class IPAdapterFaceIDRequest(BaseModel):
     height: int = 256
     seed: int | None = None
     optimize: Literal["quality", "normal", "fast"] = "normal"
+    num_inference_steps: int | None = None
+    negative_prompt: str | None = None
+    cfg_scale: float | None = None
+    lora: str | None = None
+    lora_weight: float = 1.0
     max_retries: int = 3
+
+
+class ImageEndpointResponse(BaseModel):
+    image_b64: str
+    model: str
+    duration_ms: float
+    attempts: int
+    last_error: str | None = None
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
@@ -605,7 +660,7 @@ def reasoning(req: ReasoningRequest):
     )
 
 
-@app.post("/image_gen")
+@app.post("/image_gen", response_model=ImageEndpointResponse)
 def image_gen(req: ImageGenRequest):
     _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
     reference_images = (
@@ -626,13 +681,13 @@ def image_gen(req: ImageGenRequest):
             max_retries=req.max_retries,
         )
     )
-    return {
-        "image_b64": base64.b64encode(resp.image).decode(),
-        "model": resp.model,
-        "duration_ms": resp.duration_ms,
-        "attempts": resp.attempts,
-        "last_error": resp.last_error,
-    }
+    return ImageEndpointResponse(
+        image_b64=base64.b64encode(resp.image).decode(),
+        model=resp.model,
+        duration_ms=resp.duration_ms,
+        attempts=resp.attempts,
+        last_error=resp.last_error,
+    )
 
 
 @app.post("/image_inspector")
@@ -658,10 +713,15 @@ def tools(req: ToolsRequest):
     return _f().tools().complete(req.messages, req.tools, max_retries=req.max_retries).model_dump()
 
 
-@app.post("/ipadapter")
+@app.post("/ipadapter", response_model=ImageEndpointResponse)
 def ipadapter(req: IPAdapterRequest):
     _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
     reference_image = base64.b64decode(req.reference_image_b64)
+    steps = (
+        req.num_inference_steps
+        if req.num_inference_steps is not None
+        else _OPTIMIZE_STEPS[req.optimize]
+    )
     resp = (
         _f()
         .ipadapter()
@@ -672,23 +732,32 @@ def ipadapter(req: IPAdapterRequest):
             width=req.width,
             height=req.height,
             seed=req.seed,
-            num_inference_steps=_OPTIMIZE_STEPS[req.optimize],
+            num_inference_steps=steps,
+            negative_prompt=req.negative_prompt,
+            cfg_scale=req.cfg_scale,
+            lora=req.lora,
+            lora_weight=req.lora_weight,
             max_retries=req.max_retries,
         )
     )
-    return {
-        "image_b64": base64.b64encode(resp.image).decode(),
-        "model": resp.model,
-        "duration_ms": resp.duration_ms,
-        "attempts": resp.attempts,
-        "last_error": resp.last_error,
-    }
+    return ImageEndpointResponse(
+        image_b64=base64.b64encode(resp.image).decode(),
+        model=resp.model,
+        duration_ms=resp.duration_ms,
+        attempts=resp.attempts,
+        last_error=resp.last_error,
+    )
 
 
-@app.post("/ipadapter_faceid")
+@app.post("/ipadapter_faceid", response_model=ImageEndpointResponse)
 def ipadapter_faceid(req: IPAdapterFaceIDRequest):
     _OPTIMIZE_STEPS = {"quality": 4, "normal": 3, "fast": 2}
     face_image = base64.b64decode(req.face_image_b64)
+    steps = (
+        req.num_inference_steps
+        if req.num_inference_steps is not None
+        else _OPTIMIZE_STEPS[req.optimize]
+    )
     resp = (
         _f()
         .ipadapter_faceid()
@@ -699,14 +768,18 @@ def ipadapter_faceid(req: IPAdapterFaceIDRequest):
             width=req.width,
             height=req.height,
             seed=req.seed,
-            num_inference_steps=_OPTIMIZE_STEPS[req.optimize],
+            num_inference_steps=steps,
+            negative_prompt=req.negative_prompt,
+            cfg_scale=req.cfg_scale,
+            lora=req.lora,
+            lora_weight=req.lora_weight,
             max_retries=req.max_retries,
         )
     )
-    return {
-        "image_b64": base64.b64encode(resp.image).decode(),
-        "model": resp.model,
-        "duration_ms": resp.duration_ms,
-        "attempts": resp.attempts,
-        "last_error": resp.last_error,
-    }
+    return ImageEndpointResponse(
+        image_b64=base64.b64encode(resp.image).decode(),
+        model=resp.model,
+        duration_ms=resp.duration_ms,
+        attempts=resp.attempts,
+        last_error=resp.last_error,
+    )

@@ -321,16 +321,16 @@ def test_ipadapter(client):
     resp = c.post("/ipadapter", json={"prompt": "a cat", "reference_image_b64": ref_b64})
     assert resp.status_code == 200
     assert base64.b64decode(resp.json()["image_b64"]) == b"\x89PNG"
-    factory.ipadapter.return_value.generate.assert_called_once_with(
-        "a cat",
-        b"ref_png",
-        ip_adapter_scale=0.5,
-        width=256,
-        height=256,
-        seed=None,
-        num_inference_steps=3,
-        max_retries=3,
-    )
+    gen = factory.ipadapter.return_value.generate
+    gen.assert_called_once()
+    args, kwargs = gen.call_args
+    assert args == ("a cat", b"ref_png")
+    assert kwargs["ip_adapter_scale"] == 0.5
+    assert kwargs["width"] == 256
+    assert kwargs["height"] == 256
+    assert kwargs["seed"] is None
+    assert kwargs["num_inference_steps"] == 3
+    assert kwargs["max_retries"] == 3
 
 
 def test_ipadapter_with_params(client):
@@ -350,16 +350,16 @@ def test_ipadapter_with_params(client):
         },
     )
     assert resp.status_code == 200
-    factory.ipadapter.return_value.generate.assert_called_once_with(
-        "a cat",
-        b"ref_png",
-        ip_adapter_scale=0.8,
-        width=512,
-        height=512,
-        seed=42,
-        num_inference_steps=4,
-        max_retries=3,
-    )
+    gen = factory.ipadapter.return_value.generate
+    gen.assert_called_once()
+    args, kwargs = gen.call_args
+    assert args == ("a cat", b"ref_png")
+    assert kwargs["ip_adapter_scale"] == 0.8
+    assert kwargs["width"] == 512
+    assert kwargs["height"] == 512
+    assert kwargs["seed"] == 42
+    assert kwargs["num_inference_steps"] == 4
+    assert kwargs["max_retries"] == 3
 
 
 def test_ipadapter_faceid(client):
@@ -369,16 +369,16 @@ def test_ipadapter_faceid(client):
     resp = c.post("/ipadapter_faceid", json={"prompt": "a portrait", "face_image_b64": face_b64})
     assert resp.status_code == 200
     assert base64.b64decode(resp.json()["image_b64"]) == b"\x89PNG"
-    factory.ipadapter_faceid.return_value.generate.assert_called_once_with(
-        "a portrait",
-        b"face_png",
-        ip_adapter_scale=0.5,
-        width=256,
-        height=256,
-        seed=None,
-        num_inference_steps=3,
-        max_retries=3,
-    )
+    gen = factory.ipadapter_faceid.return_value.generate
+    gen.assert_called_once()
+    args, kwargs = gen.call_args
+    assert args == ("a portrait", b"face_png")
+    assert kwargs["ip_adapter_scale"] == 0.5
+    assert kwargs["width"] == 256
+    assert kwargs["height"] == 256
+    assert kwargs["seed"] is None
+    assert kwargs["num_inference_steps"] == 3
+    assert kwargs["max_retries"] == 3
 
 
 def test_ipadapter_faceid_with_params(client):
@@ -398,16 +398,16 @@ def test_ipadapter_faceid_with_params(client):
         },
     )
     assert resp.status_code == 200
-    factory.ipadapter_faceid.return_value.generate.assert_called_once_with(
-        "a portrait",
-        b"face_png",
-        ip_adapter_scale=0.9,
-        width=64,
-        height=64,
-        seed=1,
-        num_inference_steps=2,
-        max_retries=3,
-    )
+    gen = factory.ipadapter_faceid.return_value.generate
+    gen.assert_called_once()
+    args, kwargs = gen.call_args
+    assert args == ("a portrait", b"face_png")
+    assert kwargs["ip_adapter_scale"] == 0.9
+    assert kwargs["width"] == 64
+    assert kwargs["height"] == 64
+    assert kwargs["seed"] == 1
+    assert kwargs["num_inference_steps"] == 2
+    assert kwargs["max_retries"] == 3
 
 
 # ── error paths ───────────────────────────────────────────────────────────────
