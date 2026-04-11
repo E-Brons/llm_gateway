@@ -10,6 +10,7 @@ import os
 import struct
 import zlib
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Literal
 
 import requests as _requests
@@ -131,8 +132,11 @@ def _run_sanity_checks(factory: LLMFactory) -> None:
         )
 
     if _config is not None and _config.ipadapter_faceid is not None:
-        _face_image_path = os.environ.get("SANITY_FACE_IMAGE")
-        if _face_image_path and os.path.exists(_face_image_path):
+        _face_image_path = os.environ.get(
+            "SANITY_FACE_IMAGE",
+            str(Path(__file__).parent.parent / "assets" / "sanity_face.jpg"),
+        )
+        if os.path.exists(_face_image_path):
             with open(_face_image_path, "rb") as _f:
                 _face_bytes = _f.read()
             checks.append(
@@ -151,7 +155,7 @@ def _run_sanity_checks(factory: LLMFactory) -> None:
         else:
             logger.warning(
                 "  ipadapter_faceid sanity check skipped — "
-                "set SANITY_FACE_IMAGE=/path/to/face.jpg to enable it"
+                "add a face image at assets/sanity_face.jpg or set SANITY_FACE_IMAGE"
             )
 
     logger.info(sep)
