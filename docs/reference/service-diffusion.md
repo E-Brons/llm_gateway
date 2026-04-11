@@ -30,7 +30,7 @@ This will:
 |----------|------|---------|
 | `runwayml/stable-diffusion-v1-5` | ~4 GB | Base diffusion model |
 | `h94/IP-Adapter` → `ip-adapter_sd15_light_v11.bin` | ~300 MB | Style adapter weights |
-| `h94/IP-Adapter-FaceID` → `ip-adapter-faceid-plus_sd15.bin` | ~500 MB | FaceID adapter weights |
+| `h94/IP-Adapter-FaceID` → `ip-adapter-faceid_sd15.bin` | ~500 MB | FaceID adapter weights |
 | InsightFace `buffalo_l` | ~300 MB | Face detection model for FaceID |
 
 To install Python deps without downloading models (e.g. in CI):
@@ -97,7 +97,7 @@ ipadapter:
 
 ipadapter_faceid:
   implementation: diffusion_server
-  model: ip-adapter-faceid-plus_sd15
+  model: ip-adapter-faceid_sd15
   api_base: http://localhost:7860
 ```
 
@@ -125,22 +125,87 @@ The server exposes these endpoints (also callable directly, bypassing the gatewa
 ```
 
 ### `POST /ipadapter`
+
+**Request fields:**
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `model` | string | — | Model name from the registry |
+| `prompt` | string | — | Scene / style description |
+| `reference_image` | string | — | Base64-encoded reference image (PNG/JPEG) |
+| `ip_adapter_scale` | float | `0.5` | How strongly the reference image guides generation (0–1) |
+| `width` | int | `256` | Output width in pixels |
+| `height` | int | `256` | Output height in pixels |
+| `steps` | int | `20` | Number of diffusion inference steps |
+| `cfg_scale` | float | `7.5` | Classifier-free guidance scale |
+| `negative_prompt` | string | `null` | Text describing what to avoid |
+| `seed` | int | `null` | RNG seed for reproducibility |
+| `lora` | string | `null` | HuggingFace repo ID or local path to LoRA weights |
+| `lora_weight` | float | `1.0` | LoRA conditioning strength (0–1); only used when `lora` is set |
+
+**Example request:**
 ```json
 {
   "model": "ip-adapter_sd15_light_v11",
-  "prompt": "a cat on a wooden table",
+  "prompt": "a cat on a wooden table, studio lighting",
   "reference_image": "<base64 PNG>",
-  "weight": 0.6,
+  "ip_adapter_scale": 0.6,
   "width": 512,
   "height": 512,
+  "cfg_scale": 7.5,
+  "negative_prompt": "blurry, low quality",
   "seed": 42,
   "steps": 20
 }
 ```
-Response: `{"image": "<base64 PNG>", "model": "ip-adapter_sd15_light_v11"}`
+
+**Response:** `{"image": "<base64 PNG>", "model": "ip-adapter_sd15_light_v11"}`
+
+---
 
 ### `POST /ipadapter_faceid`
-Same shape as `/ipadapter` but the field is `face_image` instead of `reference_image`.
+
+Same fields as `/ipadapter` except `reference_image` is replaced by `face_image`:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `model` | string | — | Model name from the registry |
+| `prompt` | string | — | Scene / style description |
+| `face_image` | string | — | Base64-encoded portrait image (PNG/JPEG) — the identity reference |
+| `ip_adapter_scale` | float | `0.5` | How strongly face identity is preserved (0–1) |
+| `width` | int | `256` | Output width in pixels |
+| `height` | int | `256` | Output height in pixels |
+| `steps` | int | `20` | Number of diffusion inference steps |
+| `cfg_scale` | float | `7.5` | Classifier-free guidance scale |
+| `negative_prompt` | string | `null` | Text describing what to avoid |
+| `seed` | int | `null` | RNG seed for reproducibility |
+| `lora` | string | `null` | HuggingFace repo ID or local path to LoRA weights |
+| `lora_weight` | float | `1.0` | LoRA conditioning strength (0–1); only used when `lora` is set |
+
+**Example request:**
+```json
+{
+  "model": "ip-adapter-faceid_sd15",
+  "prompt": "a person in a space suit, cinematic lighting",
+  "face_image": "<base64 PNG>",
+  "ip_adapter_scale": 0.75,
+  "width": 512,
+  "height": 512,
+  "cfg_scale": 7.5,
+  "negative_prompt": "cartoon, anime, illustration",
+  "seed": 7
+}
+```
+
+**Response:** `{"image": "<base64 PNG>", "model": "ip-adapter-faceid_sd15"}`
+
+**Error responses:**
+
+| Status | Condition |
+|---|---|
+| 400 | Unknown model or wrong endpoint for model type |
+| 422 | Image bytes cannot be decoded, or no face detected |
+| 503 | Pipeline failed to load (OOM, missing weights, etc.) |
 
 ---
 

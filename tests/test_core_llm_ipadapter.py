@@ -91,20 +91,28 @@ def test_ipadapter_sends_all_generation_params():
             "a cat",
             reference_images=[b"ref"],
             max_retries=1,
-            weight=0.8,
+            ip_adapter_scale=0.8,
             width=512,
             height=256,
             seed=42,
             num_inference_steps=10,
+            negative_prompt="blurry",
+            cfg_scale=9.0,
+            lora="my/lora",
+            lora_weight=0.7,
         )
 
     payload = mock_post.call_args[1]["json"]
     assert payload["prompt"] == "a cat"
-    assert payload["weight"] == 0.8
+    assert payload["ip_adapter_scale"] == 0.8
     assert payload["width"] == 512
     assert payload["height"] == 256
     assert payload["seed"] == 42
     assert payload["steps"] == 10
+    assert payload["negative_prompt"] == "blurry"
+    assert payload["cfg_scale"] == 9.0
+    assert payload["lora"] == "my/lora"
+    assert payload["lora_weight"] == 0.7
 
 
 def test_ipadapter_strips_model_prefix():
@@ -149,7 +157,7 @@ def test_ipadapter_default_weight():
         llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
         llm.generate("x", reference_images=[b"ref"], max_retries=1)
 
-    assert mock_post.call_args[1]["json"]["weight"] == 0.5
+    assert mock_post.call_args[1]["json"]["ip_adapter_scale"] == 0.5
 
 
 def test_ipadapter_empty_response_retries_then_raises():
@@ -192,6 +200,54 @@ def test_ipadapter_default_api_base():
 
     llm = DiffusionServerIPAdapterLLM(model="m")
     assert llm.api_base == _DEFAULT_API_BASE
+
+
+def test_ipadapter_optional_params_omitted_when_none():
+    from src.impl.impl_ipadapter import DiffusionServerIPAdapterLLM
+
+    b64 = base64.b64encode(b"img").decode()
+
+    with patch(
+        "src.impl.impl_ipadapter.requests.post",
+        return_value=_mock_image_response(b64),
+    ) as mock_post:
+        llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
+        llm.generate("x", reference_images=[b"ref"], max_retries=1)
+
+    payload = mock_post.call_args[1]["json"]
+    assert "negative_prompt" not in payload
+    assert "lora" not in payload
+    assert "lora_weight" not in payload
+
+
+def test_ipadapter_cfg_scale_default_omitted():
+    from src.impl.impl_ipadapter import DiffusionServerIPAdapterLLM
+
+    b64 = base64.b64encode(b"img").decode()
+
+    with patch(
+        "src.impl.impl_ipadapter.requests.post",
+        return_value=_mock_image_response(b64),
+    ) as mock_post:
+        llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
+        llm.generate("x", reference_images=[b"ref"], max_retries=1)
+
+    assert "cfg_scale" not in mock_post.call_args[1]["json"]
+
+
+def test_ipadapter_cfg_scale_forwarded_when_set():
+    from src.impl.impl_ipadapter import DiffusionServerIPAdapterLLM
+
+    b64 = base64.b64encode(b"img").decode()
+
+    with patch(
+        "src.impl.impl_ipadapter.requests.post",
+        return_value=_mock_image_response(b64),
+    ) as mock_post:
+        llm = DiffusionServerIPAdapterLLM(model="m", api_base=_API_BASE)
+        llm.generate("x", reference_images=[b"ref"], max_retries=1, cfg_scale=12.0)
+
+    assert mock_post.call_args[1]["json"]["cfg_scale"] == 12.0
 
 
 # ---------------------------------------------------------------------------
@@ -263,20 +319,28 @@ def test_ipadapter_faceid_sends_all_generation_params():
             "a portrait",
             reference_images=[b"face"],
             max_retries=1,
-            weight=0.75,
+            ip_adapter_scale=0.75,
             width=512,
             height=512,
             seed=7,
             num_inference_steps=20,
+            negative_prompt="ugly",
+            cfg_scale=8.0,
+            lora="my/faceid-lora",
+            lora_weight=0.5,
         )
 
     payload = mock_post.call_args[1]["json"]
     assert payload["prompt"] == "a portrait"
-    assert payload["weight"] == 0.75
+    assert payload["ip_adapter_scale"] == 0.75
     assert payload["width"] == 512
     assert payload["height"] == 512
     assert payload["seed"] == 7
     assert payload["steps"] == 20
+    assert payload["negative_prompt"] == "ugly"
+    assert payload["cfg_scale"] == 8.0
+    assert payload["lora"] == "my/faceid-lora"
+    assert payload["lora_weight"] == 0.5
 
 
 def test_ipadapter_faceid_empty_response_retries_then_raises():
@@ -299,6 +363,62 @@ def test_ipadapter_faceid_default_api_base():
 
     llm = DiffusionServerIPAdapterFaceIDLLM(model="m")
     assert llm.api_base == _DEFAULT_API_BASE
+
+
+def test_ipadapter_faceid_optional_params_omitted_when_none():
+    from src.impl.impl_ipadapter import DiffusionServerIPAdapterFaceIDLLM
+
+    b64 = base64.b64encode(b"img").decode()
+
+    with patch(
+        "src.impl.impl_ipadapter.requests.post",
+        return_value=_mock_image_response(b64),
+    ) as mock_post:
+        llm = DiffusionServerIPAdapterFaceIDLLM(model="m", api_base=_API_BASE)
+        llm.generate("x", reference_images=[b"face"], max_retries=1)
+
+    payload = mock_post.call_args[1]["json"]
+    assert "negative_prompt" not in payload
+    assert "lora" not in payload
+    assert "lora_weight" not in payload
+
+
+def test_ipadapter_faceid_default_ip_adapter_scale():
+    from src.impl.impl_ipadapter import DiffusionServerIPAdapterFaceIDLLM
+
+    b64 = base64.b64encode(b"img").decode()
+
+    with patch(
+        "src.impl.impl_ipadapter.requests.post",
+        return_value=_mock_image_response(b64),
+    ) as mock_post:
+        llm = DiffusionServerIPAdapterFaceIDLLM(model="m", api_base=_API_BASE)
+        llm.generate("x", reference_images=[b"face"], max_retries=1)
+
+    assert mock_post.call_args[1]["json"]["ip_adapter_scale"] == 0.5
+
+
+def test_ipadapter_faceid_lora_forwarded():
+    from src.impl.impl_ipadapter import DiffusionServerIPAdapterFaceIDLLM
+
+    b64 = base64.b64encode(b"img").decode()
+
+    with patch(
+        "src.impl.impl_ipadapter.requests.post",
+        return_value=_mock_image_response(b64),
+    ) as mock_post:
+        llm = DiffusionServerIPAdapterFaceIDLLM(model="m", api_base=_API_BASE)
+        llm.generate(
+            "x",
+            reference_images=[b"face"],
+            max_retries=1,
+            lora="civitai/my-lora",
+            lora_weight=0.6,
+        )
+
+    payload = mock_post.call_args[1]["json"]
+    assert payload["lora"] == "civitai/my-lora"
+    assert payload["lora_weight"] == 0.6
 
 
 # ---------------------------------------------------------------------------

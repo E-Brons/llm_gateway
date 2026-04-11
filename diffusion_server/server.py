@@ -51,22 +51,30 @@ class IPAdapterRequest(BaseModel):
     model: str
     prompt: str
     reference_image: str  # base64 PNG
-    weight: float = 0.5
+    ip_adapter_scale: float = 0.5
     width: int = 256
     height: int = 256
     seed: int | None = None
     steps: int = 20
+    negative_prompt: str | None = None
+    cfg_scale: float = 7.5
+    lora: str | None = None
+    lora_weight: float = 1.0
 
 
 class IPAdapterFaceIDRequest(BaseModel):
     model: str
     prompt: str
     face_image: str  # base64 PNG
-    weight: float = 0.5
+    ip_adapter_scale: float = 0.5
     width: int = 256
     height: int = 256
     seed: int | None = None
     steps: int = 20
+    negative_prompt: str | None = None
+    cfg_scale: float = 7.5
+    lora: str | None = None
+    lora_weight: float = 1.0
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────
@@ -96,11 +104,15 @@ def ipadapter(req: IPAdapterRequest):
             req.model,
             req.prompt,
             ref_bytes,
-            weight=req.weight,
+            ip_adapter_scale=req.ip_adapter_scale,
             width=req.width,
             height=req.height,
             seed=req.seed,
             steps=req.steps,
+            negative_prompt=req.negative_prompt,
+            cfg_scale=req.cfg_scale,
+            lora=req.lora,
+            lora_weight=req.lora_weight,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -124,11 +136,15 @@ def ipadapter_faceid(req: IPAdapterFaceIDRequest):
             req.model,
             req.prompt,
             face_bytes,
-            weight=req.weight,
+            ip_adapter_scale=req.ip_adapter_scale,
             width=req.width,
             height=req.height,
             seed=req.seed,
             steps=req.steps,
+            negative_prompt=req.negative_prompt,
+            cfg_scale=req.cfg_scale,
+            lora=req.lora,
+            lora_weight=req.lora_weight,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

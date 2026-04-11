@@ -150,20 +150,34 @@ class ImageGenLLM(ABC):
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
         reference_images: list[bytes] | None = None,
-        weight: float | None = None,
+        ip_adapter_scale: float | None = None,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
         num_inference_steps: int | None = None,
+        negative_prompt: str | None = None,
+        cfg_scale: float | None = None,
+        lora: str | None = None,
+        lora_weight: float = 1.0,
         options: dict | None = None,
     ) -> "ImageResponse":  # noqa: F821
         """Generate an image from *prompt* and return an ImageResponse.
 
         Parameters
         ----------
-        weight:
+        ip_adapter_scale:
             Conditioning strength for reference-image-guided generation
             (e.g. IP-Adapter).  Ignored by backends that do not support it.
+        negative_prompt:
+            Text describing what to avoid in the generated image.
+        cfg_scale:
+            Classifier-free guidance scale.  Higher values follow the prompt
+            more closely.  Ignored by backends that do not support it.
+        lora:
+            HuggingFace repo ID or local path to a LoRA weight file.
+            Ignored by backends that do not support it.
+        lora_weight:
+            LoRA conditioning scale (0–1).  Only used when *lora* is set.
         """
 
 
