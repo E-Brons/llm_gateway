@@ -135,9 +135,11 @@ def _load_pipeline(model: str) -> Any:
     # diffusers' prepare_ip_adapter_image_embeds accesses self.image_encoder.dtype
     # even when using pre-computed embeds. Patch a dtype proxy when no encoder is loaded.
     if getattr(pipe, "image_encoder", None) is None:
+
         class _DtypeProxy:
             def __init__(self, dtype: torch.dtype) -> None:
                 self.dtype = dtype
+
         pipe.image_encoder = _DtypeProxy(dt)
 
     # Disable safety checker — local inference server, no NSFW filtering needed.
@@ -184,11 +186,15 @@ def generate_ipadapter(
     prompt: str,
     reference_image: bytes,
     *,
-    weight: float = 0.5,
+    ip_adapter_scale: float = 0.5,
     width: int = 256,
     height: int = 256,
     seed: int | None = None,
     steps: int = 20,
+    negative_prompt: str | None = None,
+    cfg_scale: float = 7.5,
+    lora: str | None = None,
+    lora_weight: float = 1.0,
 ) -> bytes:
     """Generate an image conditioned on a reference style image."""
     if model not in _REGISTRY:
@@ -204,18 +210,25 @@ def generate_ipadapter(
     except (UnidentifiedImageError, Exception) as exc:
         raise BadImageError(f"Cannot decode reference image: {exc}") from exc
 
-    pipe.set_ip_adapter_scale(weight)
+    pipe.set_ip_adapter_scale(ip_adapter_scale)
     generator = torch.Generator(device=dev).manual_seed(seed) if seed is not None else None
     try:
         with _infer_lock:
+            if lora is not None:
+                pipe.load_lora_weights(lora)
+                pipe.set_adapters(["default"], adapter_weights=[lora_weight])
             images = pipe(
                 prompt=prompt,
+                negative_prompt=negative_prompt,
                 ip_adapter_image=ref_img,
                 width=width,
                 height=height,
                 num_inference_steps=steps,
+                guidance_scale=cfg_scale,
                 generator=generator,
             ).images
+            if lora is not None:
+                pipe.unload_lora_weights()
     except Exception as exc:
         raise RuntimeError(f"Image generation failed: {exc}") from exc
 
@@ -229,11 +242,15 @@ def generate_ipadapter_faceid(
     prompt: str,
     face_image: bytes,
     *,
-    weight: float = 0.5,
+    ip_adapter_scale: float = 0.5,
     width: int = 256,
     height: int = 256,
     seed: int | None = None,
     steps: int = 20,
+    negative_prompt: str | None = None,
+    cfg_scale: float = 7.5,
+    lora: str | None = None,
+    lora_weight: float = 1.0,
 ) -> bytes:
     """Generate an image conditioned on a face image (identity-preserving)."""
     import cv2
@@ -259,25 +276,35 @@ def generate_ipadapter_faceid(
         raise NoFaceDetectedError("No face detected in the provided image")
 
     faceid_embeds = (
-        torch.from_numpy(faces[0].normed_embedding).unsqueeze(0).unsqueeze(1).to(dev, dtype=_dtype(dev))
+        torch.from_numpy(faces[0].normed_embedding)
+        .unsqueeze(0)
+        .unsqueeze(1)
+        .to(dev, dtype=_dtype(dev))
     )
     # For CFG: concatenate negative (zeros) and positive embeds along dim 0.
     # diffusers requires 3D tensors in ip_adapter_image_embeds and calls .chunk(2) on each.
     neg_embeds = torch.zeros_like(faceid_embeds)
     faceid_embeds_cfg = torch.cat([neg_embeds, faceid_embeds], dim=0)  # [2, 1, 512]
 
-    pipe.set_ip_adapter_scale(weight)
+    pipe.set_ip_adapter_scale(ip_adapter_scale)
     generator = torch.Generator(device=dev).manual_seed(seed) if seed is not None else None
     try:
         with _infer_lock:
+            if lora is not None:
+                pipe.load_lora_weights(lora)
+                pipe.set_adapters(["default"], adapter_weights=[lora_weight])
             images = pipe(
                 prompt=prompt,
+                negative_prompt=negative_prompt,
                 ip_adapter_image_embeds=[faceid_embeds_cfg],
                 width=width,
                 height=height,
                 num_inference_steps=steps,
+                guidance_scale=cfg_scale,
                 generator=generator,
             ).images
+            if lora is not None:
+                pipe.unload_lora_weights()
     except Exception as exc:
         raise RuntimeError(f"Image generation failed: {exc}") from exc
 

@@ -284,11 +284,15 @@ class OllamaImageGenLLM(ImageGenLLM):
         max_retries: int = 3,
         validator: Callable[[bytes], bool] | None = None,
         reference_images: list[bytes] | None = None,
-        weight: float | None = None,
+        ip_adapter_scale: float | None = None,
         width: int = 256,
         height: int = 256,
         seed: int | None = None,
         num_inference_steps: int | None = None,
+        negative_prompt: str | None = None,
+        cfg_scale: float | None = None,
+        lora: str | None = None,
+        lora_weight: float = 1.0,
         options: dict | None = None,
     ) -> ImageResponse:
         images_b64 = (
